@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/app/lib/supabase/server';
-import { fetchBookDetails, RateLimitError } from '@/app/lib/bookApi';
+import { fetchBookDetails, RateLimitError, searchBookAuthors } from '@/app/lib/bookApi';
 
 // GET - Fetch cached details or fetch fresh if not cached
 export async function GET(
@@ -27,11 +27,28 @@ export async function GET(
       return NextResponse.json({ book, cached: true });
     }
 
+    // If book has no author, search for potential authors first
+    let authorToUse = book.author;
+    let needsAuthorClarification = false;
+
+    if (!book.author) {
+      const { authors: potentialAuthors, hasMultipleDistinctAuthors } = await searchBookAuthors(book.title);
+
+      if (potentialAuthors.length >= 1 && !hasMultipleDistinctAuthors) {
+        // Single author (or multiple variations of same author) found - auto-fill with the most complete name
+        authorToUse = potentialAuthors[0];
+      } else if (hasMultipleDistinctAuthors) {
+        // Multiple distinct authors found (different last names) - flag for clarification
+        needsAuthorClarification = true;
+      }
+      // If no authors found, leave author as null
+    }
+
     // Fetch fresh details from APIs (first time only)
     const bookForApi = {
       id: book.id,
       title: book.title,
-      author: book.author || undefined,
+      author: authorToUse || undefined,
       genre: 'Uncategorized',
     };
 
@@ -78,7 +95,13 @@ export async function GET(
       amazon_url: details.amazonUrl || null,
       subjects: details.subjects || null,
       details_fetched_at: new Date().toISOString(),
+      needs_author_clarification: needsAuthorClarification,
     };
+
+    // If book had no author and we found one, auto-fill it
+    if (!book.author && authorToUse) {
+      updateData.author = authorToUse;
+    }
 
     // If book genre is Uncategorized and we deduced a genre, update it
     if (deducedGenre && (!book.genre || book.genre === 'Uncategorized')) {
@@ -129,11 +152,27 @@ export async function POST(
       return NextResponse.json({ error: 'Book not found' }, { status: 404 });
     }
 
+    // If book has no author, search for potential authors first
+    let authorToUse = book.author;
+    let needsAuthorClarification = false;
+
+    if (!book.author) {
+      const { authors: potentialAuthors, hasMultipleDistinctAuthors } = await searchBookAuthors(book.title);
+
+      if (potentialAuthors.length >= 1 && !hasMultipleDistinctAuthors) {
+        // Single author (or multiple variations of same author) found - auto-fill with the most complete name
+        authorToUse = potentialAuthors[0];
+      } else if (hasMultipleDistinctAuthors) {
+        // Multiple distinct authors found (different last names) - flag for clarification
+        needsAuthorClarification = true;
+      }
+    }
+
     // Fetch fresh details from APIs (force refresh)
     const bookForApi = {
       id: book.id,
       title: book.title,
-      author: book.author || undefined,
+      author: authorToUse || undefined,
       genre: 'Uncategorized',
     };
 
@@ -149,7 +188,7 @@ export async function POST(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: book.title,
-            author: book.author,
+            author: authorToUse,
             description: details.description,
             subjects: details.subjects,
           }),
@@ -180,7 +219,13 @@ export async function POST(
       amazon_url: details.amazonUrl || null,
       subjects: details.subjects || null,
       details_fetched_at: new Date().toISOString(),
+      needs_author_clarification: needsAuthorClarification,
     };
+
+    // If book had no author and we found one, auto-fill it
+    if (!book.author && authorToUse) {
+      updateData.author = authorToUse;
+    }
 
     // If book genre is Uncategorized and we deduced a genre, update it
     if (deducedGenre && (!book.genre || book.genre === 'Uncategorized')) {

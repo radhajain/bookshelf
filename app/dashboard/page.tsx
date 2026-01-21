@@ -54,6 +54,7 @@ function dbBookToBookWithDetails(
 		ratings,
 		goodreadsUrl: dbBook.goodreads_url || undefined,
 		amazonUrl: dbBook.amazon_url || undefined,
+		needsAuthorClarification: dbBook.needs_author_clarification || false,
 	};
 }
 

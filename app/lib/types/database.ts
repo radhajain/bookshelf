@@ -20,6 +20,8 @@ export interface DbBook {
   amazon_url: string | null;
   subjects: string[] | null;
   details_fetched_at: string | null;
+  // Flag for books that need author clarification (multiple authors found)
+  needs_author_clarification: boolean;
   created_at: string;
 }
 

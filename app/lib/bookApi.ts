@@ -473,6 +473,208 @@ async function fetchOpenLibraryRatings(workKey: string): Promise<RatingSource | 
   return undefined;
 }
 
+// Extract the last name from an author name
+// Handles various formats: "First Last", "First Middle Last", "F. A. Last", "First von Last", etc.
+function extractLastName(authorName: string): string {
+  const name = authorName.trim();
+
+  // Common name prefixes that are part of the last name (von, van, de, etc.)
+  const lastNamePrefixes = ['von', 'van', 'de', 'du', 'la', 'le', 'del', 'della', 'di', 'da', 'dos', 'das', 'mc', 'mac', "o'"];
+
+  // Split by spaces
+  const parts = name.split(/\s+/).filter(p => p.length > 0);
+
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0].toLowerCase();
+
+  // Check if the second-to-last word is a prefix
+  const lastPart = parts[parts.length - 1].toLowerCase();
+  if (parts.length >= 2) {
+    const secondToLast = parts[parts.length - 2].toLowerCase();
+    if (lastNamePrefixes.includes(secondToLast)) {
+      return `${secondToLast} ${lastPart}`;
+    }
+  }
+
+  return lastPart;
+}
+
+// Check if two authors are likely the same person based on last name
+function isSameAuthor(author1: string, author2: string): boolean {
+  const lastName1 = extractLastName(author1);
+  const lastName2 = extractLastName(author2);
+  return lastName1 === lastName2;
+}
+
+// Check if a title is a summary/abridged/study guide version
+function isSummaryOrDerivative(itemTitle: string, searchTitle: string): boolean {
+  const lowerTitle = itemTitle.toLowerCase();
+  const summaryIndicators = [
+    'summary of',
+    'summary:',
+    'study guide',
+    'workbook',
+    'companion',
+    'cliff notes',
+    'cliffnotes',
+    'sparknotes',
+    'analysis of',
+    'review of',
+    'guide to',
+    'abridged',
+    'condensed',
+    'quick read',
+    'key takeaways',
+    'book summary',
+    'in minutes',
+    'speed read',
+  ];
+
+  return summaryIndicators.some(indicator => lowerTitle.includes(indicator));
+}
+
+// Search for authors by title - returns the best author match
+// Prioritizes by popularity (ratings count), ignores summaries/derivatives
+// Only flags for clarification if authors are very different AND popularity is similar
+export async function searchBookAuthors(title: string): Promise<{ authors: string[]; hasMultipleDistinctAuthors: boolean }> {
+  try {
+    const query = encodeURIComponent(title);
+    const response = await rateLimitedFetch(
+      `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=20`
+    );
+
+    if (!response || !response.ok) return { authors: [], hasMultipleDistinctAuthors: false };
+
+    interface GoogleBooksSearchResponse {
+      totalItems: number;
+      items?: Array<{
+        volumeInfo: {
+          title: string;
+          authors?: string[];
+          ratingsCount?: number;
+        };
+      }>;
+    }
+
+    const data: GoogleBooksSearchResponse = await response.json();
+
+    if (!data.items || data.items.length === 0) return { authors: [], hasMultipleDistinctAuthors: false };
+
+    const normalizedTitle = title.toLowerCase().trim();
+
+    // Filter and process results
+    const validItems: Array<{
+      title: string;
+      author: string;
+      lastName: string;
+      ratingsCount: number;
+    }> = [];
+
+    for (const item of data.items) {
+      const itemTitle = item.volumeInfo.title;
+      const lowerItemTitle = itemTitle.toLowerCase().trim();
+
+      // Skip if title doesn't match
+      const titleMatches = lowerItemTitle === normalizedTitle ||
+                          lowerItemTitle.includes(normalizedTitle) ||
+                          normalizedTitle.includes(lowerItemTitle);
+      if (!titleMatches) continue;
+
+      // Skip summaries and derivative works
+      if (isSummaryOrDerivative(itemTitle, title)) continue;
+
+      // Skip if no author
+      if (!item.volumeInfo.authors || item.volumeInfo.authors.length === 0) continue;
+
+      const author = item.volumeInfo.authors[0];
+      const lastName = extractLastName(author);
+      const ratingsCount = item.volumeInfo.ratingsCount || 0;
+
+      validItems.push({
+        title: itemTitle,
+        author,
+        lastName,
+        ratingsCount,
+      });
+    }
+
+    if (validItems.length === 0) return { authors: [], hasMultipleDistinctAuthors: false };
+
+    // Group by last name, tracking total ratings for each
+    const authorsByLastName = new Map<string, { author: string; totalRatings: number; maxRatings: number }>();
+
+    for (const item of validItems) {
+      const existing = authorsByLastName.get(item.lastName);
+      if (!existing) {
+        authorsByLastName.set(item.lastName, {
+          author: item.author,
+          totalRatings: item.ratingsCount,
+          maxRatings: item.ratingsCount,
+        });
+      } else {
+        existing.totalRatings += item.ratingsCount;
+        if (item.ratingsCount > existing.maxRatings) {
+          existing.maxRatings = item.ratingsCount;
+        }
+        // Keep the longer (more complete) name
+        if (item.author.length > existing.author.length) {
+          existing.author = item.author;
+        }
+      }
+    }
+
+    // Convert to array and sort by total ratings (descending)
+    const sortedAuthors = Array.from(authorsByLastName.entries())
+      .map(([lastName, data]) => ({
+        lastName,
+        author: data.author,
+        totalRatings: data.totalRatings,
+        maxRatings: data.maxRatings,
+      }))
+      .sort((a, b) => b.totalRatings - a.totalRatings);
+
+    if (sortedAuthors.length === 0) return { authors: [], hasMultipleDistinctAuthors: false };
+
+    // If only one distinct author (by last name), return it
+    if (sortedAuthors.length === 1) {
+      return { authors: [sortedAuthors[0].author], hasMultipleDistinctAuthors: false };
+    }
+
+    // Multiple distinct authors - check if we should auto-select the most popular
+    const mostPopular = sortedAuthors[0];
+    const secondMostPopular = sortedAuthors[1];
+
+    // If the most popular has significantly more ratings (3x or more), auto-select it
+    // Or if the most popular has ratings and others don't
+    const popularityRatio = secondMostPopular.totalRatings > 0
+      ? mostPopular.totalRatings / secondMostPopular.totalRatings
+      : Infinity;
+
+    // Auto-select if:
+    // 1. Most popular has 3x+ the ratings of second place, OR
+    // 2. Most popular has ratings and second place has none, OR
+    // 3. Most popular has 100+ ratings and second has < 20
+    const shouldAutoSelect =
+      popularityRatio >= 3 ||
+      (mostPopular.totalRatings > 0 && secondMostPopular.totalRatings === 0) ||
+      (mostPopular.totalRatings >= 100 && secondMostPopular.totalRatings < 20);
+
+    if (shouldAutoSelect) {
+      return { authors: [mostPopular.author], hasMultipleDistinctAuthors: false };
+    }
+
+    // Ratings are similar - need user clarification
+    // Return all authors sorted by popularity
+    return {
+      authors: sortedAuthors.map(a => a.author),
+      hasMultipleDistinctAuthors: true,
+    };
+  } catch (error) {
+    console.error(`Error searching authors for "${title}":`, error);
+    return { authors: [], hasMultipleDistinctAuthors: false };
+  }
+}
+
 export async function fetchBookDetails(book: Book): Promise<BookWithDetails> {
   const cacheKey = `${book.title}-${book.author || ''}`;
 

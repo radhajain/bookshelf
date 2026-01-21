@@ -28,6 +28,7 @@ export interface BookWithDetails extends Book {
   goodreadsUrl?: string;
   amazonUrl?: string;
   deducedGenre?: string; // Genre deduced from API subjects, used to set book.genre if not already set
+  needsAuthorClarification?: boolean; // Flag when multiple authors found for a book
 }
 
 // Parse title to extract author if embedded (e.g., "Elon Musk by Walter Isaacson")

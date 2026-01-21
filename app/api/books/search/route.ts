@@ -12,6 +12,8 @@ interface GoogleBooksVolume {
     };
     publishedDate?: string;
     publisher?: string;
+    ratingsCount?: number;
+    averageRating?: number;
   };
 }
 
@@ -28,6 +30,8 @@ interface BookSearchResult {
   coverImage?: string;
   publishedDate?: string;
   publisher?: string;
+  ratingsCount?: number;
+  averageRating?: number;
 }
 
 // GET /api/books/search?q=title - Search for books by title
@@ -71,6 +75,8 @@ export async function GET(request: NextRequest) {
       coverImage: item.volumeInfo.imageLinks?.thumbnail?.replace('http://', 'https://'),
       publishedDate: item.volumeInfo.publishedDate,
       publisher: item.volumeInfo.publisher,
+      ratingsCount: item.volumeInfo.ratingsCount,
+      averageRating: item.volumeInfo.averageRating,
     }));
 
     // Deduplicate by title + author combination

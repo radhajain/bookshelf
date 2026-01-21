@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { BookWithDetails, RatingSource } from '../lib/books';
+import AuthorSelectionModal from './books/AuthorSelectionModal';
 
 interface BookDetailsSidebarProps {
   book: BookWithDetails | null;
@@ -83,6 +84,7 @@ export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove 
   const [refreshing, setRefreshing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [showAuthorSelection, setShowAuthorSelection] = useState(false);
 
   if (!book) return null;
 
@@ -180,8 +182,31 @@ export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove 
             {/* Title & Author */}
             <div className="flex-1">
               <h1 className="text-xl font-bold text-zinc-900 mb-1">{book.title}</h1>
-              {book.author && (
-                <p className="text-zinc-600 mb-2">by {book.author}</p>
+              {book.author ? (
+                <div className="flex items-center gap-1 mb-2">
+                  <p className="text-zinc-600">by {book.author}</p>
+                  <button
+                    onClick={() => setShowAuthorSelection(true)}
+                    className="p-1 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-colors"
+                    title="Change author"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                </div>
+              ) : book.needsAuthorClarification ? (
+                <button
+                  onClick={() => setShowAuthorSelection(true)}
+                  className="text-amber-600 mb-2 text-sm italic hover:text-amber-700 hover:underline flex items-center gap-1"
+                >
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  Click to select author
+                </button>
+              ) : (
+                <p className="text-zinc-400 mb-2 text-sm italic">Unknown author</p>
               )}
               <div className="flex flex-wrap gap-2">
                 <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
@@ -206,6 +231,32 @@ export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove 
               )}
             </div>
           </div>
+
+          {/* Author Clarification Banner */}
+          {book.needsAuthorClarification && !book.author && (
+            <button
+              onClick={() => setShowAuthorSelection(true)}
+              className="mb-6 w-full p-4 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 hover:border-amber-300 transition-colors text-left group"
+            >
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="flex-1">
+                  <h4 className="font-medium text-amber-800 mb-1">Author Clarification Needed</h4>
+                  <p className="text-sm text-amber-700 mb-2">
+                    Multiple authors were found for this title. Click to select the correct author.
+                  </p>
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 group-hover:text-amber-700">
+                    Select author
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </span>
+                </div>
+              </div>
+            </button>
+          )}
 
           {/* Ratings Section */}
           <div className="mb-6">
@@ -352,6 +403,22 @@ export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove 
           )}
         </div>
       </div>
+
+      {/* Author Selection Modal */}
+      {showAuthorSelection && (
+        <AuthorSelectionModal
+          bookTitle={book.title}
+          bookId={book.id}
+          onClose={() => setShowAuthorSelection(false)}
+          onAuthorSelected={(author) => {
+            setShowAuthorSelection(false);
+            // Trigger a refresh to get updated book details with the new author
+            if (onRefresh) {
+              onRefresh();
+            }
+          }}
+        />
+      )}
     </>
   );
 }
