@@ -38,12 +38,12 @@ export default async function PublicProfilePage({ params }: PageProps) {
 		console.error('Error fetching books:', booksError);
 	}
 
-	// Convert to BookWithDetails format
+	// Convert to BookWithDetails format (genre is on the book, not user_books)
 	const books: BookWithDetails[] = (userBooks || []).map((ub) => ({
 		id: ub.book_id,
 		title: ub.book.title,
 		author: ub.book.author || undefined,
-		genre: ub.genre || 'Uncategorized',
+		genre: ub.book.genre || 'Uncategorized',
 		pages: ub.book.page_count || undefined,
 		notes: ub.notes || undefined,
 		priority: ub.priority || undefined,

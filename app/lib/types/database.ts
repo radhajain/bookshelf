@@ -4,6 +4,7 @@ export interface DbBook {
   id: string;
   title: string;
   author: string | null;
+  genre: string;
   cover_image: string | null;
   description: string | null;
   isbn: string | null;
@@ -18,7 +19,6 @@ export interface DbBook {
   goodreads_url: string | null;
   amazon_url: string | null;
   subjects: string[] | null;
-  suggested_genre: string | null;
   details_fetched_at: string | null;
   created_at: string;
 }
@@ -35,7 +35,6 @@ export interface DbUserBook {
   id: string;
   user_id: string;
   book_id: string;
-  genre: string;
   notes: string | null;
   priority: string | null;
   created_at: string;
@@ -54,15 +53,17 @@ export interface CreateBookInput {
 
 export interface CreateUserBookInput {
   book_id: string;
-  genre?: string;
   notes?: string;
   priority?: string;
 }
 
 export interface UpdateUserBookInput {
-  genre?: string;
   notes?: string;
   priority?: string;
+}
+
+export interface UpdateBookInput {
+  genre?: string;
 }
 
 export interface UpdateProfileInput {

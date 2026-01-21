@@ -57,12 +57,21 @@ export async function POST(request: Request) {
 
       if (existingBook) {
         bookId = existingBook.id;
+        // Update genre on existing book if provided and book doesn't have one set
+        if (book.genre && book.genre !== 'Uncategorized') {
+          await supabase
+            .from('books')
+            .update({ genre: book.genre })
+            .eq('id', existingBook.id)
+            .or('genre.is.null,genre.eq.Uncategorized');
+        }
       } else {
         const { data: newBook, error: bookError } = await supabase
           .from('books')
           .insert({
             title: book.title,
             author: book.author || null,
+            genre: book.genre || 'Uncategorized',
           })
           .select('id')
           .single();
@@ -97,13 +106,12 @@ export async function POST(request: Request) {
         }
       }
 
-      // Add to user's shelf
+      // Add to user's shelf (genre is now on book, not user_books)
       const { error: userBookError } = await supabase
         .from('user_books')
         .insert({
           user_id: user.id,
           book_id: bookId,
-          genre: book.genre || 'Uncategorized',
           notes: book.notes || null,
           priority: book.priority || null,
         });

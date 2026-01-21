@@ -38,8 +38,8 @@ export async function GET(
     const details = await fetchBookDetails(bookForApi);
 
     // If no genre was deduced from subjects, try LLM fallback
-    let suggestedGenre = details.suggestedGenre;
-    if (!suggestedGenre && (details.description || details.subjects)) {
+    let deducedGenre = details.deducedGenre;
+    if (!deducedGenre && (details.description || details.subjects)) {
       try {
         const baseUrl = request.nextUrl.origin;
         const genreResponse = await fetch(`${baseUrl}/api/deduce-genre`, {
@@ -54,7 +54,7 @@ export async function GET(
         });
         if (genreResponse.ok) {
           const { genre } = await genreResponse.json();
-          suggestedGenre = genre;
+          deducedGenre = genre;
         }
       } catch (error) {
         console.error('Error calling genre deduction API:', error);
@@ -62,7 +62,8 @@ export async function GET(
     }
 
     // Update book with fetched details
-    const updateData = {
+    // Also set genre if it's still Uncategorized and we deduced one
+    const updateData: Record<string, unknown> = {
       cover_image: details.coverImage || book.cover_image,
       description: details.description || book.description,
       isbn: details.isbn || book.isbn,
@@ -76,9 +77,13 @@ export async function GET(
       goodreads_url: details.goodreadsUrl || null,
       amazon_url: details.amazonUrl || null,
       subjects: details.subjects || null,
-      suggested_genre: suggestedGenre || null,
       details_fetched_at: new Date().toISOString(),
     };
+
+    // If book genre is Uncategorized and we deduced a genre, update it
+    if (deducedGenre && (!book.genre || book.genre === 'Uncategorized')) {
+      updateData.genre = deducedGenre;
+    }
 
     const { data: updatedBook, error: updateError } = await supabase
       .from('books')
@@ -135,8 +140,8 @@ export async function POST(
     const details = await fetchBookDetails(bookForApi);
 
     // If no genre was deduced from subjects, try LLM fallback
-    let suggestedGenre = details.suggestedGenre;
-    if (!suggestedGenre && (details.description || details.subjects)) {
+    let deducedGenre = details.deducedGenre;
+    if (!deducedGenre && (details.description || details.subjects)) {
       try {
         const baseUrl = request.nextUrl.origin;
         const genreResponse = await fetch(`${baseUrl}/api/deduce-genre`, {
@@ -151,7 +156,7 @@ export async function POST(
         });
         if (genreResponse.ok) {
           const { genre } = await genreResponse.json();
-          suggestedGenre = genre;
+          deducedGenre = genre;
         }
       } catch (error) {
         console.error('Error calling genre deduction API:', error);
@@ -159,7 +164,8 @@ export async function POST(
     }
 
     // Update book with fetched details
-    const updateData = {
+    // Also set genre if it's still Uncategorized and we deduced one
+    const updateData: Record<string, unknown> = {
       cover_image: details.coverImage || null,
       description: details.description || null,
       isbn: details.isbn || null,
@@ -173,9 +179,13 @@ export async function POST(
       goodreads_url: details.goodreadsUrl || null,
       amazon_url: details.amazonUrl || null,
       subjects: details.subjects || null,
-      suggested_genre: suggestedGenre || null,
       details_fetched_at: new Date().toISOString(),
     };
+
+    // If book genre is Uncategorized and we deduced a genre, update it
+    if (deducedGenre && (!book.genre || book.genre === 'Uncategorized')) {
+      updateData.genre = deducedGenre;
+    }
 
     const { data: updatedBook, error: updateError } = await supabase
       .from('books')

@@ -36,27 +36,38 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { book_id, title, author, genre, notes, priority } = body;
+  const { book_id, bookId, title, author, genre, notes, priority } = body;
 
-  let finalBookId = book_id;
+  let finalBookId = book_id || bookId;
 
   // If no book_id provided, find or create the book first
   if (!finalBookId && title) {
     // Try to find existing book
     const { data: existingBook } = await supabase
       .from('books')
-      .select('id')
+      .select('id, genre')
       .eq('title', title)
       .eq('author', author || '')
       .single();
 
     if (existingBook) {
       finalBookId = existingBook.id;
+      // Update genre on existing book if provided and book doesn't have one set
+      if (genre && genre !== 'Uncategorized' && (!existingBook.genre || existingBook.genre === 'Uncategorized')) {
+        await supabase
+          .from('books')
+          .update({ genre })
+          .eq('id', existingBook.id);
+      }
     } else {
-      // Create new book
+      // Create new book with genre
       const { data: newBook, error: bookError } = await supabase
         .from('books')
-        .insert({ title, author: author || null })
+        .insert({
+          title,
+          author: author || null,
+          genre: genre || 'Uncategorized',
+        })
         .select('id')
         .single();
 
@@ -83,13 +94,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'book_id or title is required' }, { status: 400 });
   }
 
-  // Add to user's shelf
+  // Add to user's shelf (genre is now on the book, not user_books)
   const { data, error } = await supabase
     .from('user_books')
     .insert({
       user_id: user.id,
       book_id: finalBookId,
-      genre: genre || 'Uncategorized',
       notes: notes || null,
       priority: priority || null,
     })

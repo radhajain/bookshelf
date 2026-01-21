@@ -26,7 +26,6 @@ export default function AddBookModal({ onClose, onBookAdded }: AddBookModalProps
   // Form state
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
-  const [genre, setGenre] = useState('');
   const [notes, setNotes] = useState('');
   const [priority, setPriority] = useState('');
 
@@ -110,7 +109,6 @@ export default function AddBookModal({ onClose, onBookAdded }: AddBookModalProps
         body: JSON.stringify({
           title: selectedBook?.title || title.trim(),
           author: selectedBook?.author || author.trim() || null,
-          genre: genre.trim() || 'Uncategorized',
           notes: notes.trim() || null,
           priority: priority.trim() || null,
         }),
@@ -163,20 +161,6 @@ export default function AddBookModal({ onClose, onBookAdded }: AddBookModalProps
           onChange={(e) => setAuthor(e.target.value)}
           className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-colors"
           placeholder="Enter author name"
-        />
-      </div>
-
-      <div>
-        <label htmlFor="genre" className="block text-sm font-medium text-zinc-700 mb-1">
-          Genre <span className="text-zinc-400 text-xs">(auto-detected if blank)</span>
-        </label>
-        <input
-          type="text"
-          id="genre"
-          value={genre}
-          onChange={(e) => setGenre(e.target.value)}
-          className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-colors"
-          placeholder="e.g., Fiction, Business, Self-Help"
         />
       </div>
 
@@ -335,20 +319,6 @@ export default function AddBookModal({ onClose, onBookAdded }: AddBookModalProps
             <p className="text-sm text-zinc-500 mt-2 line-clamp-3">{selectedBook.description}</p>
           )}
         </div>
-      </div>
-
-      <div>
-        <label htmlFor="genre-confirm" className="block text-sm font-medium text-zinc-700 mb-1">
-          Genre <span className="text-zinc-400 text-xs">(auto-detected if blank)</span>
-        </label>
-        <input
-          type="text"
-          id="genre-confirm"
-          value={genre}
-          onChange={(e) => setGenre(e.target.value)}
-          className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-colors"
-          placeholder="e.g., Fiction, Business, Self-Help"
-        />
       </div>
 
       <div>

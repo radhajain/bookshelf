@@ -523,8 +523,8 @@ export async function fetchBookDetails(book: Book): Promise<BookWithDetails> {
     ...(openLibraryData.subjects || []),
   ];
 
-  // Deduce genre from subjects
-  const suggestedGenre = deduceGenreFromSubjects(allSubjects);
+  // Deduce genre from subjects (will be used to set book.genre if not already set)
+  const deducedGenre = deduceGenreFromSubjects(allSubjects);
 
   // Merge data, preferring Google Books for description, but using Open Library for cover if needed
   const bookWithDetails: BookWithDetails = {
@@ -539,7 +539,7 @@ export async function fetchBookDetails(book: Book): Promise<BookWithDetails> {
     subjects: googleData.subjects || openLibraryData.subjects,
     goodreadsUrl,
     amazonUrl,
-    suggestedGenre,
+    deducedGenre,
   };
 
   cache.set(cacheKey, bookWithDetails);

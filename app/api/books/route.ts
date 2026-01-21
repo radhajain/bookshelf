@@ -1,26 +1,59 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/app/lib/supabase/server';
 
-// GET /api/books - Search shared book catalog
+// GET /api/books - Get all books in library with optional search
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
+  const genre = searchParams.get('genre');
 
   const supabase = await createClient();
 
-  let dbQuery = supabase.from('books').select('*');
+  // Get current user to check which books they already have
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let dbQuery = supabase.from('books').select('*').order('title');
 
   if (query) {
     dbQuery = dbQuery.or(`title.ilike.%${query}%,author.ilike.%${query}%`);
   }
 
-  const { data, error } = await dbQuery.limit(50);
+  if (genre && genre !== 'all') {
+    dbQuery = dbQuery.eq('genre', genre);
+  }
+
+  const { data: books, error } = await dbQuery.limit(100);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  // If user is logged in, get their book IDs to mark which ones they have
+  let userBookIds: string[] = [];
+  if (user) {
+    const { data: userBooks } = await supabase
+      .from('user_books')
+      .select('book_id')
+      .eq('user_id', user.id);
+
+    userBookIds = userBooks?.map(ub => ub.book_id) || [];
+  }
+
+  // Add inMyShelf flag to each book
+  const booksWithShelfStatus = books?.map(book => ({
+    ...book,
+    inMyShelf: userBookIds.includes(book.id),
+  })) || [];
+
+  // Get unique genres for filtering
+  const { data: genreData } = await supabase
+    .from('books')
+    .select('genre')
+    .not('genre', 'is', null);
+
+  const genres = [...new Set(genreData?.map(b => b.genre).filter(Boolean) || [])].sort();
+
+  return NextResponse.json({ books: booksWithShelfStatus, genres });
 }
 
 // POST /api/books - Find or create book in shared catalog

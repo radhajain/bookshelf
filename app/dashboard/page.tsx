@@ -41,7 +41,7 @@ function dbBookToBookWithDetails(
 		id: dbBook.id,
 		title: dbBook.title,
 		author: dbBook.author || undefined,
-		genre: userBook?.genre || 'Uncategorized',
+		genre: dbBook.genre || 'Uncategorized',
 		pages: dbBook.page_count || undefined,
 		notes: userBook?.notes || undefined,
 		priority: userBook?.priority || undefined,
@@ -277,7 +277,6 @@ export default function DashboardPage() {
 		if (enriched) {
 			return {
 				...enriched,
-				genre: ub.genre,
 				notes: ub.notes || undefined,
 				priority: ub.priority || undefined,
 			};
@@ -286,7 +285,7 @@ export default function DashboardPage() {
 			id: ub.book_id,
 			title: ub.book.title,
 			author: ub.book.author || undefined,
-			genre: ub.genre,
+			genre: ub.book.genre || 'Uncategorized',
 			pages: ub.book.page_count || undefined,
 			notes: ub.notes || undefined,
 			priority: ub.priority || undefined,
@@ -296,10 +295,10 @@ export default function DashboardPage() {
 		};
 	};
 
-	// Group books by genre
+	// Group books by genre (genre is now on the book, not user_books)
 	const booksByGenre = userBooks.reduce(
 		(acc, ub) => {
-			const genre = ub.genre || 'Uncategorized';
+			const genre = ub.book.genre || 'Uncategorized';
 			if (!acc[genre]) acc[genre] = [];
 			acc[genre].push(ub);
 			return acc;
@@ -343,6 +342,12 @@ export default function DashboardPage() {
 							</p>
 						</div>
 						<div className="flex items-center gap-3">
+							<Link
+								href="/browse"
+								className="px-3 py-2 text-sm text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+							>
+								Browse Library
+							</Link>
 							<Link
 								href="/dashboard/settings"
 								className="px-3 py-2 text-sm text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
