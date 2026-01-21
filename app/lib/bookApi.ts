@@ -57,18 +57,212 @@ interface OpenLibraryRatingsResponse {
   };
 }
 
+// Standard genre categories for the bookshelf
+const GENRE_CATEGORIES = [
+  'Fiction',
+  'Non-Fiction',
+  'Science Fiction',
+  'Fantasy',
+  'Mystery',
+  'Thriller',
+  'Romance',
+  'Horror',
+  'Biography',
+  'History',
+  'Science',
+  'Self-Help',
+  'Business',
+  'Philosophy',
+  'Poetry',
+  'Children',
+  'Young Adult',
+  'Classics',
+  'Graphic Novel',
+  'Cookbook',
+  'Travel',
+  'Art',
+  'Music',
+  'Sports',
+  'Religion',
+  'Technology',
+  'Health',
+  'True Crime',
+  'Humor',
+  'Drama',
+] as const;
+
+// Map common subject keywords to genres
+const SUBJECT_TO_GENRE_MAP: Record<string, string> = {
+  // Fiction genres
+  'fiction': 'Fiction',
+  'novel': 'Fiction',
+  'literary fiction': 'Fiction',
+  'science fiction': 'Science Fiction',
+  'sci-fi': 'Science Fiction',
+  'scifi': 'Science Fiction',
+  'space opera': 'Science Fiction',
+  'dystopian': 'Science Fiction',
+  'cyberpunk': 'Science Fiction',
+  'fantasy': 'Fantasy',
+  'epic fantasy': 'Fantasy',
+  'urban fantasy': 'Fantasy',
+  'magic': 'Fantasy',
+  'dragons': 'Fantasy',
+  'mystery': 'Mystery',
+  'detective': 'Mystery',
+  'crime fiction': 'Mystery',
+  'whodunit': 'Mystery',
+  'thriller': 'Thriller',
+  'suspense': 'Thriller',
+  'psychological thriller': 'Thriller',
+  'espionage': 'Thriller',
+  'romance': 'Romance',
+  'love stories': 'Romance',
+  'romantic': 'Romance',
+  'horror': 'Horror',
+  'scary': 'Horror',
+  'supernatural': 'Horror',
+  'ghost stories': 'Horror',
+  'vampires': 'Horror',
+  // Non-fiction genres
+  'non-fiction': 'Non-Fiction',
+  'nonfiction': 'Non-Fiction',
+  'biography': 'Biography',
+  'autobiography': 'Biography',
+  'memoir': 'Biography',
+  'biographies': 'Biography',
+  'history': 'History',
+  'historical': 'History',
+  'world history': 'History',
+  'military history': 'History',
+  'science': 'Science',
+  'popular science': 'Science',
+  'physics': 'Science',
+  'biology': 'Science',
+  'chemistry': 'Science',
+  'astronomy': 'Science',
+  'self-help': 'Self-Help',
+  'self help': 'Self-Help',
+  'personal development': 'Self-Help',
+  'motivation': 'Self-Help',
+  'business': 'Business',
+  'economics': 'Business',
+  'management': 'Business',
+  'entrepreneurship': 'Business',
+  'finance': 'Business',
+  'investing': 'Business',
+  'philosophy': 'Philosophy',
+  'philosophical': 'Philosophy',
+  'ethics': 'Philosophy',
+  'poetry': 'Poetry',
+  'poems': 'Poetry',
+  'verse': 'Poetry',
+  'children': 'Children',
+  "children's": 'Children',
+  'juvenile': 'Children',
+  'picture books': 'Children',
+  'young adult': 'Young Adult',
+  'ya': 'Young Adult',
+  'teen': 'Young Adult',
+  'teenagers': 'Young Adult',
+  'classics': 'Classics',
+  'classic literature': 'Classics',
+  'literary classics': 'Classics',
+  'graphic novel': 'Graphic Novel',
+  'graphic novels': 'Graphic Novel',
+  'comics': 'Graphic Novel',
+  'manga': 'Graphic Novel',
+  'cookbook': 'Cookbook',
+  'cooking': 'Cookbook',
+  'recipes': 'Cookbook',
+  'culinary': 'Cookbook',
+  'travel': 'Travel',
+  'travel writing': 'Travel',
+  'adventure travel': 'Travel',
+  'art': 'Art',
+  'art history': 'Art',
+  'painting': 'Art',
+  'photography': 'Art',
+  'music': 'Music',
+  'musicians': 'Music',
+  'rock music': 'Music',
+  'sports': 'Sports',
+  'athletics': 'Sports',
+  'football': 'Sports',
+  'baseball': 'Sports',
+  'basketball': 'Sports',
+  'religion': 'Religion',
+  'spirituality': 'Religion',
+  'christianity': 'Religion',
+  'buddhism': 'Religion',
+  'islam': 'Religion',
+  'technology': 'Technology',
+  'computers': 'Technology',
+  'programming': 'Technology',
+  'software': 'Technology',
+  'artificial intelligence': 'Technology',
+  'health': 'Health',
+  'wellness': 'Health',
+  'medicine': 'Health',
+  'fitness': 'Health',
+  'nutrition': 'Health',
+  'true crime': 'True Crime',
+  'crime': 'True Crime',
+  'murder': 'True Crime',
+  'humor': 'Humor',
+  'comedy': 'Humor',
+  'funny': 'Humor',
+  'satire': 'Humor',
+  'drama': 'Drama',
+  'plays': 'Drama',
+  'theatre': 'Drama',
+  'theater': 'Drama',
+};
+
+// Deduce genre from subjects/categories
+function deduceGenreFromSubjects(subjects?: string[]): string | undefined {
+  if (!subjects || subjects.length === 0) return undefined;
+
+  // Normalize and check each subject against our mapping
+  for (const subject of subjects) {
+    const normalized = subject.toLowerCase().trim();
+
+    // Direct match
+    if (SUBJECT_TO_GENRE_MAP[normalized]) {
+      return SUBJECT_TO_GENRE_MAP[normalized];
+    }
+
+    // Partial match - check if any key is contained in the subject
+    for (const [key, genre] of Object.entries(SUBJECT_TO_GENRE_MAP)) {
+      if (normalized.includes(key) || key.includes(normalized)) {
+        return genre;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 // In-memory cache to avoid repeated API calls
 const cache = new Map<string, BookWithDetails>();
 
 // Rate limiting: track last request time
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 150; // 150ms between requests
+const MIN_REQUEST_INTERVAL = 200; // 200ms between requests
 
 async function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function rateLimitedFetch(url: string): Promise<Response> {
+// Custom error for rate limiting - can be caught by UI to pause
+export class RateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RateLimitError';
+  }
+}
+
+async function rateLimitedFetch(url: string): Promise<Response | null> {
   const now = Date.now();
   const timeSinceLastRequest = now - lastRequestTime;
 
@@ -77,11 +271,35 @@ async function rateLimitedFetch(url: string): Promise<Response> {
   }
 
   lastRequestTime = Date.now();
-  return fetch(url, {
-    headers: {
-      'User-Agent': 'JackBookshelf/1.0 (book reading list app)',
-    },
-  });
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'JackBookshelf/1.0 (book reading list app)',
+      },
+    });
+
+    // Handle rate limiting (429) - throw error so UI can pause
+    if (response.status === 429) {
+      throw new RateLimitError('Rate limited by API. Please wait before continuing.');
+    }
+
+    // Server errors - just return null and continue with other books
+    if (response.status >= 500) {
+      console.error(`Server error (${response.status}) for ${url}`);
+      return null;
+    }
+
+    return response;
+  } catch (error) {
+    // Re-throw RateLimitError so it bubbles up
+    if (error instanceof RateLimitError) {
+      throw error;
+    }
+    // Network error (e.g., "Failed to fetch") - throw as rate limit to pause
+    console.error(`Network error for ${url}:`, error);
+    throw new RateLimitError('Network error. Please check your connection and try again.');
+  }
 }
 
 // Get the best available cover image URL from Google Books
@@ -142,7 +360,7 @@ async function fetchGoogleBooks(title: string, author?: string): Promise<{
       `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`
     );
 
-    if (!response.ok) return {};
+    if (!response || !response.ok) return {};
 
     const data: GoogleBooksResponse = await response.json();
 
@@ -190,7 +408,7 @@ async function fetchOpenLibrary(title: string, author?: string): Promise<{
       `https://openlibrary.org/search.json?q=${query}&limit=1&fields=key,title,author_name,cover_i,isbn,first_sentence,subject,ratings_average,ratings_count`
     );
 
-    if (!response.ok) return {};
+    if (!response || !response.ok) return {};
 
     const data: OpenLibraryResponse = await response.json();
 
@@ -236,7 +454,7 @@ async function fetchOpenLibraryRatings(workKey: string): Promise<RatingSource | 
       `https://openlibrary.org${workKey}/ratings.json`
     );
 
-    if (!response.ok) return undefined;
+    if (!response || !response.ok) return undefined;
 
     const data: OpenLibraryRatingsResponse = await response.json();
 
@@ -299,6 +517,15 @@ export async function fetchBookDetails(book: Book): Promise<BookWithDetails> {
     url: amazonUrl,
   });
 
+  // Combine all subjects for genre deduction
+  const allSubjects = [
+    ...(googleData.subjects || []),
+    ...(openLibraryData.subjects || []),
+  ];
+
+  // Deduce genre from subjects
+  const suggestedGenre = deduceGenreFromSubjects(allSubjects);
+
   // Merge data, preferring Google Books for description, but using Open Library for cover if needed
   const bookWithDetails: BookWithDetails = {
     ...book,
@@ -312,6 +539,7 @@ export async function fetchBookDetails(book: Book): Promise<BookWithDetails> {
     subjects: googleData.subjects || openLibraryData.subjects,
     goodreadsUrl,
     amazonUrl,
+    suggestedGenre,
   };
 
   cache.set(cacheKey, bookWithDetails);

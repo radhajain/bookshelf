@@ -27,6 +27,7 @@ export interface BookWithDetails extends Book {
   subjects?: string[];
   goodreadsUrl?: string;
   amazonUrl?: string;
+  suggestedGenre?: string;
 }
 
 // Parse title to extract author if embedded (e.g., "Elon Musk by Walter Isaacson")
