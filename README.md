@@ -1,6 +1,10 @@
 # Shelf
 
 A personal content curation and sharing platform. Build your digital shelf of books, movies, and podcasts.
+<img width="1379" height="1200" alt="CleanShot 2026-01-23 at 16 06 52" src="https://github.com/user-attachments/assets/513c2066-ac97-4937-a02e-77ee067cb489" />
+<img width="1614" height="1192" alt="CleanShot 2026-01-23 at 16 09 43" src="https://github.com/user-attachments/assets/6410f88b-2974-4e54-acfb-3e509e12401a" />
+<img width="1502" height="1190" alt="CleanShot 2026-01-23 at 16 07 34" src="https://github.com/user-attachments/assets/100d9ffd-dc17-4370-b4b6-2aacc17fdef7" />
+<img width="1726" height="1183" alt="CleanShot 2026-01-23 at 16 08 36" src="https://github.com/user-attachments/assets/4bcc04d6-9ebc-430b-9675-f9d195a15081" />
 
 ## The Problem
 
