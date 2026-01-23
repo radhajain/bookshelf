@@ -38,25 +38,6 @@ Shelf is your personal content library that you actually own and can share:
 - **APIs**: Google Books, Open Library, TMDB, Podcast Index
 - **AI**: Claude for chat recommendations
 
-## Project Structure
-
-```
-app/
-├── components/
-│   ├── shared/           # Reusable UI components (Modal, Sidebar, ContentCard, etc.)
-│   ├── books/            # Book-specific components
-│   ├── movies/           # Movie-specific components
-│   ├── podcasts/         # Podcast-specific components
-│   └── auth/             # Authentication components
-├── lib/
-│   ├── types/            # TypeScript types and shared content configs
-│   ├── supabase/         # Supabase client configuration
-│   └── *.ts              # API helpers (bookApi, movieApi, podcastApi)
-├── api/                  # API routes
-├── dashboard/            # My Shelf page
-├── browse/               # Browse Library page
-└── u/[username]/         # Public profile pages
-```
 
 ## Getting Started
 
