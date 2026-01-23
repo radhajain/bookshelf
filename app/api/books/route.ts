@@ -73,14 +73,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   }
 
-  // First, try to find existing book
+  // First, try to find existing book (case-insensitive)
   let existingBookQuery = supabase
     .from('books')
     .select('*')
-    .eq('title', title);
+    .ilike('title', title);
 
   if (author) {
-    existingBookQuery = existingBookQuery.eq('author', author);
+    existingBookQuery = existingBookQuery.ilike('author', author);
   } else {
     existingBookQuery = existingBookQuery.is('author', null);
   }
@@ -107,10 +107,10 @@ export async function POST(request: Request) {
       let refetchQuery = supabase
         .from('books')
         .select('*')
-        .eq('title', title);
+        .ilike('title', title);
 
       if (author) {
-        refetchQuery = refetchQuery.eq('author', author);
+        refetchQuery = refetchQuery.ilike('author', author);
       } else {
         refetchQuery = refetchQuery.is('author', null);
       }

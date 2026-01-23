@@ -3,7 +3,14 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useAuth } from '@/app/components/auth/AuthProvider';
 import { createClient } from '@/app/lib/supabase/client';
-import { UserBookWithDetails, DbBook, UserMovieWithDetails, DbMovie, UserPodcastWithDetails, DbPodcast } from '@/app/lib/types/database';
+import {
+	UserBookWithDetails,
+	DbBook,
+	UserMovieWithDetails,
+	DbMovie,
+	UserPodcastWithDetails,
+	DbPodcast,
+} from '@/app/lib/types/database';
 import { BookWithDetails, RatingSource } from '@/app/lib/books';
 import { MovieWithDetails, MovieRatingSource } from '@/app/lib/movies';
 import { PodcastWithDetails, PodcastRatingSource } from '@/app/lib/podcasts';
@@ -68,6 +75,7 @@ function dbBookToBookWithDetails(
 		amazonUrl: dbBook.amazon_url || undefined,
 		needsAuthorClarification: dbBook.needs_author_clarification || false,
 		detailsFetchedAt: dbBook.details_fetched_at || undefined,
+		read: userBook?.read || false,
 	};
 }
 
@@ -118,7 +126,7 @@ function dbMovieToMovieWithDetails(
 		title: dbMovie.title,
 		director: dbMovie.director || undefined,
 		year: dbMovie.year || undefined,
-		genre: userMovie?.genre || (dbMovie.genres?.[0]) || 'Uncategorized',
+		genre: userMovie?.genre || dbMovie.genres?.[0] || 'Uncategorized',
 		runtime: dbMovie.runtime_minutes || undefined,
 		notes: userMovie?.notes || undefined,
 		priority: userMovie?.priority || undefined,
@@ -167,7 +175,7 @@ function dbPodcastToPodcastWithDetails(
 		id: dbPodcast.id,
 		title: dbPodcast.title,
 		creator: dbPodcast.creator || undefined,
-		genre: userPodcast?.genre || (dbPodcast.genres?.[0]) || 'Uncategorized',
+		genre: userPodcast?.genre || dbPodcast.genres?.[0] || 'Uncategorized',
 		notes: userPodcast?.notes || undefined,
 		priority: userPodcast?.priority || undefined,
 		description: dbPodcast.description || undefined,
@@ -189,9 +197,19 @@ function DashboardPageInner() {
 	const searchParams = useSearchParams();
 	const router = useRouter();
 	const { user, profile, signOut, loading: authLoading } = useAuth();
+
+	// Redirect non-logged in users to /browse
+	useEffect(() => {
+		if (!authLoading && !user) {
+			router.replace('/browse');
+		}
+	}, [authLoading, user, router]);
+
 	const [userBooks, setUserBooks] = useState<UserBookWithDetails[]>([]);
 	const [userMovies, setUserMovies] = useState<UserMovieWithDetails[]>([]);
-	const [userPodcasts, setUserPodcasts] = useState<UserPodcastWithDetails[]>([]);
+	const [userPodcasts, setUserPodcasts] = useState<UserPodcastWithDetails[]>(
+		[],
+	);
 	const [enrichedBooks, setEnrichedBooks] = useState<
 		Map<string, BookWithDetails>
 	>(new Map());
@@ -212,28 +230,31 @@ function DashboardPageInner() {
 	const [selectedMovie, setSelectedMovie] = useState<MovieWithDetails | null>(
 		null,
 	);
-	const [selectedPodcast, setSelectedPodcast] = useState<PodcastWithDetails | null>(
-		null,
-	);
+	const [selectedPodcast, setSelectedPodcast] =
+		useState<PodcastWithDetails | null>(null);
 	const [selectedUserBookId, setSelectedUserBookId] = useState<string | null>(
 		null,
 	);
 	const [selectedUserMovieId, setSelectedUserMovieId] = useState<string | null>(
 		null,
 	);
-	const [selectedUserPodcastId, setSelectedUserPodcastId] = useState<string | null>(
-		null,
-	);
+	const [selectedUserPodcastId, setSelectedUserPodcastId] = useState<
+		string | null
+	>(null);
 	const [showAddModal, setShowAddModal] = useState(false);
 	const [showAddMovieModal, setShowAddMovieModal] = useState(false);
 	const [showAddPodcastModal, setShowAddPodcastModal] = useState(false);
 	const [showCSVModal, setShowCSVModal] = useState(false);
+	const [showAddDropdown, setShowAddDropdown] = useState(false);
 	const [isEnrichmentPaused, setIsEnrichmentPaused] = useState(false);
 	const [isEnriching, setIsEnriching] = useState(false);
 	const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
 	const [selectedGenreFilter, setSelectedGenreFilter] = useState<string>('all');
-	const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>('all');
-	const [collapsedGenres, setCollapsedGenres] = useState<Set<string>>(new Set());
+	const [mediaTypeFilter, setMediaTypeFilter] =
+		useState<MediaTypeFilter>('all');
+	const [collapsedGenres, setCollapsedGenres] = useState<Set<string>>(
+		new Set(),
+	);
 	const [searchQuery, setSearchQuery] = useState('');
 	const enrichmentPausedRef = useRef(false);
 	const supabase = createClient();
@@ -270,104 +291,95 @@ function DashboardPageInner() {
 		}
 	}, [isEnrichmentPaused]);
 
-	const enrichBooks = useCallback(
-		async (books: UserBookWithDetails[]) => {
-			const enriched = new Map<string, BookWithDetails>();
-			setLoadingProgress({ loaded: 0, total: books.length });
-			setIsEnriching(true);
-			let loaded = 0;
+	const enrichBooks = useCallback(async (books: UserBookWithDetails[]) => {
+		const enriched = new Map<string, BookWithDetails>();
+		setLoadingProgress({ loaded: 0, total: books.length });
+		setIsEnriching(true);
+		let loaded = 0;
 
-			for (const ub of books) {
-				// Check if paused
-				if (enrichmentPausedRef.current) {
-					// Wait until unpaused
-					await new Promise<void>((resolve) => {
-						const checkPause = () => {
-							if (!enrichmentPausedRef.current) {
-								resolve();
-							} else {
-								setTimeout(checkPause, 100);
-							}
-						};
-						checkPause();
-					});
-				}
+		for (const ub of books) {
+			// Check if paused
+			if (enrichmentPausedRef.current) {
+				// Wait until unpaused
+				await new Promise<void>((resolve) => {
+					const checkPause = () => {
+						if (!enrichmentPausedRef.current) {
+							resolve();
+						} else {
+							setTimeout(checkPause, 100);
+						}
+					};
+					checkPause();
+				});
+			}
 
-				// Check if book already has cached details
-				if (ub.book.details_fetched_at) {
-					// Use cached data from database
-					enriched.set(ub.book_id, dbBookToBookWithDetails(ub.book, ub));
-					loaded++;
-					setLoadingProgress({ loaded, total: books.length });
-					setEnrichedBooks(new Map(enriched));
-				} else if (!enriched.has(ub.book_id)) {
-					// Fetch and cache details via API
-					try {
-						const response = await fetch(`/api/books/${ub.book_id}/details`);
-						if (response.ok) {
-							const { book: updatedBook } = await response.json();
-							enriched.set(
-								ub.book_id,
-								dbBookToBookWithDetails(updatedBook, ub),
-							);
-						} else if (response.status === 429) {
-							// Rate limited - pause enrichment
-							const data = await response.json();
-							setRateLimitMessage(data.error || 'Rate limited. Pausing...');
-							setIsEnrichmentPaused(true);
-							enrichmentPausedRef.current = true;
-							// Don't increment loaded - we'll retry this book
-							continue;
-						}
-					} catch (error) {
-						if (error instanceof RateLimitError) {
-							setRateLimitMessage(error.message);
-							setIsEnrichmentPaused(true);
-							enrichmentPausedRef.current = true;
-							continue;
-						}
-						console.error('Error fetching book details:', error);
+			// Check if book already has cached details
+			if (ub.book.details_fetched_at) {
+				// Use cached data from database
+				enriched.set(ub.book_id, dbBookToBookWithDetails(ub.book, ub));
+				loaded++;
+				setLoadingProgress({ loaded, total: books.length });
+				setEnrichedBooks(new Map(enriched));
+			} else if (!enriched.has(ub.book_id)) {
+				// Fetch and cache details via API
+				try {
+					const response = await fetch(`/api/books/${ub.book_id}/details`);
+					if (response.ok) {
+						const { book: updatedBook } = await response.json();
+						enriched.set(ub.book_id, dbBookToBookWithDetails(updatedBook, ub));
+					} else if (response.status === 429) {
+						// Rate limited - pause enrichment
+						const data = await response.json();
+						setRateLimitMessage(data.error || 'Rate limited. Pausing...');
+						setIsEnrichmentPaused(true);
+						enrichmentPausedRef.current = true;
+						// Don't increment loaded - we'll retry this book
+						continue;
 					}
-					loaded++;
-					setLoadingProgress({ loaded, total: books.length });
-					setEnrichedBooks(new Map(enriched));
+				} catch (error) {
+					if (error instanceof RateLimitError) {
+						setRateLimitMessage(error.message);
+						setIsEnrichmentPaused(true);
+						enrichmentPausedRef.current = true;
+						continue;
+					}
+					console.error('Error fetching book details:', error);
+				}
+				loaded++;
+				setLoadingProgress({ loaded, total: books.length });
+				setEnrichedBooks(new Map(enriched));
+			}
+		}
+		setIsEnriching(false);
+	}, []);
+
+	const enrichMovies = useCallback(async (movies: UserMovieWithDetails[]) => {
+		const enriched = new Map<string, MovieWithDetails>();
+
+		for (const um of movies) {
+			// Check if movie already has cached details
+			if (um.movie.details_fetched_at) {
+				// Use cached data from database
+				enriched.set(um.movie_id, dbMovieToMovieWithDetails(um.movie, um));
+				setEnrichedMovies(new Map(enriched));
+			} else if (!enriched.has(um.movie_id)) {
+				// Fetch and cache details via API
+				try {
+					const response = await fetch(`/api/movies/${um.movie_id}/details`);
+					if (response.ok) {
+						const { movie: updatedMovie } = await response.json();
+						enriched.set(
+							um.movie_id,
+							dbMovieToMovieWithDetails(updatedMovie, um),
+						);
+						setEnrichedMovies(new Map(enriched));
+					}
+				} catch (error) {
+					console.error('Error fetching movie details:', error);
 				}
 			}
-			setIsEnriching(false);
-		},
-		[],
-	);
-
-	const enrichMovies = useCallback(
-		async (movies: UserMovieWithDetails[]) => {
-			const enriched = new Map<string, MovieWithDetails>();
-
-			for (const um of movies) {
-				// Check if movie already has cached details
-				if (um.movie.details_fetched_at) {
-					// Use cached data from database
-					enriched.set(um.movie_id, dbMovieToMovieWithDetails(um.movie, um));
-					setEnrichedMovies(new Map(enriched));
-				} else if (!enriched.has(um.movie_id)) {
-					// Fetch and cache details via API
-					try {
-						const response = await fetch(`/api/movies/${um.movie_id}/details`);
-						if (response.ok) {
-							const { movie: updatedMovie } = await response.json();
-							enriched.set(
-								um.movie_id,
-								dbMovieToMovieWithDetails(updatedMovie, um),
-							);
-							setEnrichedMovies(new Map(enriched));
-						}
-					} catch (error) {
-						console.error('Error fetching movie details:', error);
-					}
-				}
-			}
-		},
-		[],
-	);
+		}
+	}, []);
 
 	const enrichPodcasts = useCallback(
 		async (podcasts: UserPodcastWithDetails[]) => {
@@ -377,12 +389,17 @@ function DashboardPageInner() {
 				// Check if podcast already has cached details
 				if (up.podcast.details_fetched_at) {
 					// Use cached data from database
-					enriched.set(up.podcast_id, dbPodcastToPodcastWithDetails(up.podcast, up));
+					enriched.set(
+						up.podcast_id,
+						dbPodcastToPodcastWithDetails(up.podcast, up),
+					);
 					setEnrichedPodcasts(new Map(enriched));
 				} else if (!enriched.has(up.podcast_id)) {
 					// Fetch and cache details via API
 					try {
-						const response = await fetch(`/api/podcasts/${up.podcast_id}/details`);
+						const response = await fetch(
+							`/api/podcasts/${up.podcast_id}/details`,
+						);
 						if (response.ok) {
 							const { podcast: updatedPodcast } = await response.json();
 							enriched.set(
@@ -412,26 +429,32 @@ function DashboardPageInner() {
 			const [booksResult, moviesResult, podcastsResult] = await Promise.all([
 				supabase
 					.from('user_books')
-					.select(`
+					.select(
+						`
 						*,
 						book:books(*)
-					`)
+					`,
+					)
 					.eq('user_id', user.id)
 					.order('created_at', { ascending: false }),
 				supabase
 					.from('user_movies')
-					.select(`
+					.select(
+						`
 						*,
 						movie:movies(*)
-					`)
+					`,
+					)
 					.eq('user_id', user.id)
 					.order('created_at', { ascending: false }),
 				supabase
 					.from('user_podcasts')
-					.select(`
+					.select(
+						`
 						*,
 						podcast:podcasts(*)
-					`)
+					`,
+					)
 					.eq('user_id', user.id)
 					.order('created_at', { ascending: false }),
 			]);
@@ -472,6 +495,38 @@ function DashboardPageInner() {
 			// Update URL without full page reload
 			if (book) {
 				router.push(`/dashboard?book=${book.id}`, { scroll: false });
+			} else {
+				router.push('/dashboard', { scroll: false });
+			}
+		},
+		[router],
+	);
+
+	// Update URL when selecting/deselecting a movie
+	const selectMovie = useCallback(
+		(movie: MovieWithDetails | null, userMovieId: string | null) => {
+			setSelectedMovie(movie);
+			setSelectedUserMovieId(userMovieId);
+
+			// Update URL without full page reload
+			if (movie) {
+				router.push(`/dashboard?movie=${movie.id}`, { scroll: false });
+			} else {
+				router.push('/dashboard', { scroll: false });
+			}
+		},
+		[router],
+	);
+
+	// Update URL when selecting/deselecting a podcast
+	const selectPodcast = useCallback(
+		(podcast: PodcastWithDetails | null, userPodcastId: string | null) => {
+			setSelectedPodcast(podcast);
+			setSelectedUserPodcastId(userPodcastId);
+
+			// Update URL without full page reload
+			if (podcast) {
+				router.push(`/dashboard?podcast=${podcast.id}`, { scroll: false });
 			} else {
 				router.push('/dashboard', { scroll: false });
 			}
@@ -633,7 +688,9 @@ function DashboardPageInner() {
 				});
 				if (response.ok) {
 					const { podcast: updatedPodcast } = await response.json();
-					const userPodcast = userPodcasts.find((up) => up.podcast_id === podcastId);
+					const userPodcast = userPodcasts.find(
+						(up) => up.podcast_id === podcastId,
+					);
 					const podcastWithDetails = dbPodcastToPodcastWithDetails(
 						updatedPodcast,
 						userPodcast,
@@ -699,20 +756,23 @@ function DashboardPageInner() {
 		async (watched: boolean) => {
 			if (!selectedUserMovieId) return;
 			try {
-				const response = await fetch(`/api/user-movies?id=${selectedUserMovieId}`, {
-					method: 'PATCH',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						watched,
-						watched_at: watched ? new Date().toISOString() : null,
-					}),
-				});
+				const response = await fetch(
+					`/api/user-movies?id=${selectedUserMovieId}`,
+					{
+						method: 'PATCH',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							watched,
+							watched_at: watched ? new Date().toISOString() : null,
+						}),
+					},
+				);
 				if (response.ok) {
 					// Update local state
 					setUserMovies((prev) =>
 						prev.map((um) =>
-							um.id === selectedUserMovieId ? { ...um, watched } : um
-						)
+							um.id === selectedUserMovieId ? { ...um, watched } : um,
+						),
 					);
 					if (selectedMovie) {
 						setSelectedMovie({ ...selectedMovie, watched });
@@ -723,6 +783,39 @@ function DashboardPageInner() {
 			}
 		},
 		[selectedUserMovieId, selectedMovie],
+	);
+
+	const handleToggleRead = useCallback(
+		async (read: boolean) => {
+			if (!selectedUserBookId) return;
+			try {
+				const response = await fetch(
+					`/api/user-books?id=${selectedUserBookId}`,
+					{
+						method: 'PATCH',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							read,
+							read_at: read ? new Date().toISOString() : null,
+						}),
+					},
+				);
+				if (response.ok) {
+					// Update local state
+					setUserBooks((prev) =>
+						prev.map((ub) =>
+							ub.id === selectedUserBookId ? { ...ub, read } : ub,
+						),
+					);
+					if (selectedBook) {
+						setSelectedBook({ ...selectedBook, read });
+					}
+				}
+			} catch (error) {
+				console.error('Error updating read status:', error);
+			}
+		},
+		[selectedUserBookId, selectedBook],
 	);
 
 	// Convert UserBook to BookWithDetails for display
@@ -769,7 +862,7 @@ function DashboardPageInner() {
 				title: um.movie.title,
 				director: um.movie.director || undefined,
 				year: um.movie.year || undefined,
-				genre: um.genre || (um.movie.genres?.[0]) || 'Uncategorized',
+				genre: um.genre || um.movie.genres?.[0] || 'Uncategorized',
 				runtime: um.movie.runtime_minutes || undefined,
 				notes: um.notes || undefined,
 				priority: um.priority || undefined,
@@ -797,7 +890,7 @@ function DashboardPageInner() {
 				id: up.podcast_id,
 				title: up.podcast.title,
 				creator: up.podcast.creator || undefined,
-				genre: up.genre || (up.podcast.genres?.[0]) || 'Uncategorized',
+				genre: up.genre || up.podcast.genres?.[0] || 'Uncategorized',
 				notes: up.notes || undefined,
 				priority: up.priority || undefined,
 				description: up.podcast.description || undefined,
@@ -821,14 +914,38 @@ function DashboardPageInner() {
 		}
 	}, [searchParams, userBooks, loading, getBookWithDetails]);
 
+	// Handle deep linking - open movie from URL param
+	useEffect(() => {
+		const movieId = searchParams.get('movie');
+		if (movieId && userMovies.length > 0 && !loading) {
+			const userMovie = userMovies.find((um) => um.movie_id === movieId);
+			if (userMovie) {
+				setSelectedMovie(getMovieWithDetails(userMovie));
+				setSelectedUserMovieId(userMovie.id);
+			}
+		}
+	}, [searchParams, userMovies, loading, getMovieWithDetails]);
+
+	// Handle deep linking - open podcast from URL param
+	useEffect(() => {
+		const podcastId = searchParams.get('podcast');
+		if (podcastId && userPodcasts.length > 0 && !loading) {
+			const userPodcast = userPodcasts.find((up) => up.podcast_id === podcastId);
+			if (userPodcast) {
+				setSelectedPodcast(getPodcastWithDetails(userPodcast));
+				setSelectedUserPodcastId(userPodcast.id);
+			}
+		}
+	}, [searchParams, userPodcasts, loading, getPodcastWithDetails]);
+
 	// Filter books and movies by search query
 	const filteredUserBooks = searchQuery
 		? userBooks.filter((ub) => {
 				const query = searchQuery.toLowerCase();
 				return (
 					ub.book.title.toLowerCase().includes(query) ||
-					(ub.book.author?.toLowerCase().includes(query)) ||
-					(ub.notes?.toLowerCase().includes(query))
+					ub.book.author?.toLowerCase().includes(query) ||
+					ub.notes?.toLowerCase().includes(query)
 				);
 			})
 		: userBooks;
@@ -838,9 +955,9 @@ function DashboardPageInner() {
 				const query = searchQuery.toLowerCase();
 				return (
 					um.movie.title.toLowerCase().includes(query) ||
-					(um.movie.director?.toLowerCase().includes(query)) ||
-					(um.notes?.toLowerCase().includes(query)) ||
-					(um.movie.cast_members?.some((c) => c.toLowerCase().includes(query)))
+					um.movie.director?.toLowerCase().includes(query) ||
+					um.notes?.toLowerCase().includes(query) ||
+					um.movie.cast_members?.some((c) => c.toLowerCase().includes(query))
 				);
 			})
 		: userMovies;
@@ -850,8 +967,8 @@ function DashboardPageInner() {
 				const query = searchQuery.toLowerCase();
 				return (
 					up.podcast.title.toLowerCase().includes(query) ||
-					(up.podcast.creator?.toLowerCase().includes(query)) ||
-					(up.notes?.toLowerCase().includes(query))
+					up.podcast.creator?.toLowerCase().includes(query) ||
+					up.notes?.toLowerCase().includes(query)
 				);
 			})
 		: userPodcasts;
@@ -870,7 +987,7 @@ function DashboardPageInner() {
 	// Group movies by genre
 	const moviesByGenre = filteredUserMovies.reduce(
 		(acc, um) => {
-			const genre = um.genre || (um.movie.genres?.[0]) || 'Uncategorized';
+			const genre = um.genre || um.movie.genres?.[0] || 'Uncategorized';
 			if (!acc[genre]) acc[genre] = [];
 			acc[genre].push(um);
 			return acc;
@@ -881,7 +998,7 @@ function DashboardPageInner() {
 	// Group podcasts by genre
 	const podcastsByGenre = filteredUserPodcasts.reduce(
 		(acc, up) => {
-			const genre = up.genre || (up.podcast.genres?.[0]) || 'Uncategorized';
+			const genre = up.genre || up.podcast.genres?.[0] || 'Uncategorized';
 			if (!acc[genre]) acc[genre] = [];
 			acc[genre].push(up);
 			return acc;
@@ -918,12 +1035,19 @@ function DashboardPageInner() {
 									'Loading...'
 								) : (
 									<>
-										{userBooks.length} {userBooks.length === 1 ? 'book' : 'books'}
+										{userBooks.length}{' '}
+										{userBooks.length === 1 ? 'book' : 'books'}
 										{userMovies.length > 0 && (
-											<>, {userMovies.length} {userMovies.length === 1 ? 'movie' : 'movies'}</>
+											<>
+												, {userMovies.length}{' '}
+												{userMovies.length === 1 ? 'movie' : 'movies'}
+											</>
 										)}
 										{userPodcasts.length > 0 && (
-											<>, {userPodcasts.length} {userPodcasts.length === 1 ? 'podcast' : 'podcasts'}</>
+											<>
+												, {userPodcasts.length}{' '}
+												{userPodcasts.length === 1 ? 'podcast' : 'podcasts'}
+											</>
 										)}
 										{profile?.username && (
 											<span className="ml-2">
@@ -951,7 +1075,7 @@ function DashboardPageInner() {
 								href="/dashboard/settings"
 								className="px-3 py-2 text-sm text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
 							>
-								Settings
+								Profile
 							</Link>
 							<button
 								onClick={signOut}
@@ -969,82 +1093,147 @@ function DashboardPageInner() {
 				<div className="max-w-7xl mx-auto px-4 py-3">
 					<div className="flex items-center justify-between flex-wrap gap-3">
 						<div className="flex gap-3">
-							<button
-								onClick={() => setShowAddModal(true)}
-								className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-							>
-								<svg
-									className="w-5 h-5"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
+							{/* Add Dropdown */}
+							<div className="relative">
+								<button
+									onClick={() => setShowAddDropdown(!showAddDropdown)}
+									className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
 								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-									/>
-								</svg>
-								Add Book
-							</button>
-							<button
-								onClick={() => setShowAddMovieModal(true)}
-								className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-							>
-								<svg
-									className="w-5 h-5"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"
-									/>
-								</svg>
-								Add Movie
-							</button>
-							<button
-								onClick={() => setShowAddPodcastModal(true)}
-								className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-							>
-								<svg
-									className="w-5 h-5"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-									/>
-								</svg>
-								Add Podcast
-							</button>
-							<button
-								onClick={() => setShowCSVModal(true)}
-								className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-medium rounded-lg transition-colors flex items-center gap-2"
-							>
-								<svg
-									className="w-5 h-5"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-									/>
-								</svg>
-								Import CSV
-							</button>
+									<svg
+										className="w-5 h-5"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={2}
+											d="M12 4v16m8-8H4"
+										/>
+									</svg>
+									Add
+									<svg
+										className={`w-4 h-4 transition-transform ${showAddDropdown ? 'rotate-180' : ''}`}
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={2}
+											d="M19 9l-7 7-7-7"
+										/>
+									</svg>
+								</button>
+
+								{showAddDropdown && (
+									<>
+										{/* Backdrop to close dropdown */}
+										<div
+											className="fixed inset-0 z-10"
+											onClick={() => setShowAddDropdown(false)}
+										/>
+										<div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-zinc-200 z-20 overflow-hidden">
+											<button
+												onClick={() => {
+													setShowAddModal(true);
+													setShowAddDropdown(false);
+												}}
+												className="w-full px-4 py-3 text-left hover:bg-amber-50 flex items-center gap-3 transition-colors"
+											>
+												<svg
+													className="w-5 h-5 text-amber-500"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+													/>
+												</svg>
+												<span className="font-medium text-zinc-700">Book</span>
+											</button>
+											<button
+												onClick={() => {
+													setShowAddMovieModal(true);
+													setShowAddDropdown(false);
+												}}
+												className="w-full px-4 py-3 text-left hover:bg-blue-50 flex items-center gap-3 transition-colors"
+											>
+												<svg
+													className="w-5 h-5 text-blue-500"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"
+													/>
+												</svg>
+												<span className="font-medium text-zinc-700">Movie</span>
+											</button>
+											<button
+												onClick={() => {
+													setShowAddPodcastModal(true);
+													setShowAddDropdown(false);
+												}}
+												className="w-full px-4 py-3 text-left hover:bg-purple-50 flex items-center gap-3 transition-colors"
+											>
+												<svg
+													className="w-5 h-5 text-purple-500"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+													/>
+												</svg>
+												<span className="font-medium text-zinc-700">
+													Podcast
+												</span>
+											</button>
+											<div className="border-t border-zinc-100">
+												<button
+													onClick={() => {
+														setShowCSVModal(true);
+														setShowAddDropdown(false);
+													}}
+													className="w-full px-4 py-3 text-left hover:bg-zinc-50 flex items-center gap-3 transition-colors"
+												>
+													<svg
+														className="w-5 h-5 text-zinc-500"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
+														<path
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth={2}
+															d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+														/>
+													</svg>
+													<span className="font-medium text-zinc-700">
+														Import CSV
+													</span>
+												</button>
+											</div>
+										</div>
+									</>
+								)}
+							</div>
 						</div>
 
 						{/* Search Input */}
@@ -1076,8 +1265,18 @@ function DashboardPageInner() {
 											onClick={() => setSearchQuery('')}
 											className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-600"
 										>
-											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+											<svg
+												className="w-4 h-4"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M6 18L18 6M6 6l12 12"
+												/>
 											</svg>
 										</button>
 									)}
@@ -1091,26 +1290,38 @@ function DashboardPageInner() {
 								{/* Media Type Filter */}
 								{(userMovies.length > 0 || userPodcasts.length > 0) && (
 									<div className="flex items-center gap-2">
-										<label htmlFor="media-type-filter" className="text-sm text-zinc-500">
+										<label
+											htmlFor="media-type-filter"
+											className="text-sm text-zinc-500"
+										>
 											Type:
 										</label>
 										<select
 											id="media-type-filter"
 											value={mediaTypeFilter}
-											onChange={(e) => setMediaTypeFilter(e.target.value as MediaTypeFilter)}
+											onChange={(e) =>
+												setMediaTypeFilter(e.target.value as MediaTypeFilter)
+											}
 											className="px-3 py-1.5 text-sm border border-zinc-200 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										>
 											<option value="all">All ({totalItems})</option>
 											<option value="books">Books ({userBooks.length})</option>
-											<option value="movies">Movies ({userMovies.length})</option>
-											<option value="podcasts">Podcasts ({userPodcasts.length})</option>
+											<option value="movies">
+												Movies ({userMovies.length})
+											</option>
+											<option value="podcasts">
+												Podcasts ({userPodcasts.length})
+											</option>
 										</select>
 									</div>
 								)}
 
 								{/* Genre Filter */}
 								<div className="flex items-center gap-2">
-									<label htmlFor="genre-filter" className="text-sm text-zinc-500">
+									<label
+										htmlFor="genre-filter"
+										className="text-sm text-zinc-500"
+									>
 										Genre:
 									</label>
 									<select
@@ -1142,8 +1353,18 @@ function DashboardPageInner() {
 											className="p-1.5 text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 rounded transition-colors"
 											title="Expand all sections"
 										>
-											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+											<svg
+												className="w-4 h-4"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+												/>
 											</svg>
 										</button>
 										<button
@@ -1151,8 +1372,18 @@ function DashboardPageInner() {
 											className="p-1.5 text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 rounded transition-colors"
 											title="Collapse all sections"
 										>
-											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+											<svg
+												className="w-4 h-4"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25"
+												/>
 											</svg>
 										</button>
 									</div>
@@ -1227,7 +1458,9 @@ function DashboardPageInner() {
 					<div className="flex flex-col items-center justify-center py-20">
 						<div className="w-16 h-16 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin mb-4" />
 						<p className="text-zinc-500">
-							{authLoading ? 'Checking authentication...' : 'Loading your bookshelf...'}
+							{authLoading
+								? 'Checking authentication...'
+								: 'Loading your bookshelf...'}
 						</p>
 					</div>
 				) : totalItems === 0 ? (
@@ -1285,15 +1518,19 @@ function DashboardPageInner() {
 							return hasBooks || hasMovies || hasPodcasts;
 						})
 						.map((genre) => {
-							const isCollapsed = collapsedGenres.has(genre) && selectedGenreFilter === 'all';
+							const isCollapsed =
+								collapsedGenres.has(genre) && selectedGenreFilter === 'all';
 							const genreBooks = booksByGenre[genre] || [];
 							const genreMovies = moviesByGenre[genre] || [];
 							const genrePodcasts = podcastsByGenre[genre] || [];
 
 							// Filter items based on media type
-							const showBooks = mediaTypeFilter === 'all' || mediaTypeFilter === 'books';
-							const showMovies = mediaTypeFilter === 'all' || mediaTypeFilter === 'movies';
-							const showPodcasts = mediaTypeFilter === 'all' || mediaTypeFilter === 'podcasts';
+							const showBooks =
+								mediaTypeFilter === 'all' || mediaTypeFilter === 'books';
+							const showMovies =
+								mediaTypeFilter === 'all' || mediaTypeFilter === 'movies';
+							const showPodcasts =
+								mediaTypeFilter === 'all' || mediaTypeFilter === 'podcasts';
 
 							// Count for badge
 							const itemCount =
@@ -1304,9 +1541,14 @@ function DashboardPageInner() {
 							return (
 								<section key={genre} className="mb-8">
 									<button
-										onClick={() => selectedGenreFilter === 'all' && toggleGenreCollapsed(genre)}
+										onClick={() =>
+											selectedGenreFilter === 'all' &&
+											toggleGenreCollapsed(genre)
+										}
 										className={`w-full flex items-center gap-3 mb-4 pb-3 border-b-2 border-zinc-200 text-left group ${
-											selectedGenreFilter === 'all' ? 'cursor-pointer hover:border-amber-300' : 'cursor-default'
+											selectedGenreFilter === 'all'
+												? 'cursor-pointer hover:border-amber-300'
+												: 'cursor-default'
 										}`}
 									>
 										{selectedGenreFilter === 'all' && (
@@ -1318,7 +1560,12 @@ function DashboardPageInner() {
 												stroke="currentColor"
 												viewBox="0 0 24 24"
 											>
-												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M9 5l7 7-7 7"
+												/>
 											</svg>
 										)}
 										<h2 className="text-xl font-bold text-zinc-800">{genre}</h2>
@@ -1329,47 +1576,50 @@ function DashboardPageInner() {
 									{!isCollapsed && (
 										<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
 											{/* Render books */}
-											{showBooks && genreBooks.map((ub) => (
-												<BookCard
-													key={`book-${ub.id}`}
-													book={getBookWithDetails(ub)}
-													onClick={() => {
-														setSelectedMovie(null);
-														setSelectedUserMovieId(null);
-														setSelectedPodcast(null);
-														setSelectedUserPodcastId(null);
-														selectBook(getBookWithDetails(ub), ub.id);
-													}}
-												/>
-											))}
+											{showBooks &&
+												genreBooks.map((ub) => (
+													<BookCard
+														key={`book-${ub.id}`}
+														book={getBookWithDetails(ub)}
+														onClick={() => {
+															setSelectedMovie(null);
+															setSelectedUserMovieId(null);
+															setSelectedPodcast(null);
+															setSelectedUserPodcastId(null);
+															selectBook(getBookWithDetails(ub), ub.id);
+														}}
+													/>
+												))}
 											{/* Render movies */}
-											{showMovies && genreMovies.map((um) => (
-												<MovieCard
-													key={`movie-${um.id}`}
-													movie={getMovieWithDetails(um)}
-													onClick={() => {
-														selectBook(null, null);
-														setSelectedPodcast(null);
-														setSelectedUserPodcastId(null);
-														setSelectedMovie(getMovieWithDetails(um));
-														setSelectedUserMovieId(um.id);
-													}}
-												/>
-											))}
+											{showMovies &&
+												genreMovies.map((um) => (
+													<MovieCard
+														key={`movie-${um.id}`}
+														movie={getMovieWithDetails(um)}
+														onClick={() => {
+															setSelectedBook(null);
+															setSelectedUserBookId(null);
+															setSelectedPodcast(null);
+															setSelectedUserPodcastId(null);
+															selectMovie(getMovieWithDetails(um), um.id);
+														}}
+													/>
+												))}
 											{/* Render podcasts */}
-											{showPodcasts && genrePodcasts.map((up) => (
-												<PodcastCard
-													key={`podcast-${up.id}`}
-													podcast={getPodcastWithDetails(up)}
-													onClick={() => {
-														selectBook(null, null);
-														setSelectedMovie(null);
-														setSelectedUserMovieId(null);
-														setSelectedPodcast(getPodcastWithDetails(up));
-														setSelectedUserPodcastId(up.id);
-													}}
-												/>
-											))}
+											{showPodcasts &&
+												genrePodcasts.map((up) => (
+													<PodcastCard
+														key={`podcast-${up.id}`}
+														podcast={getPodcastWithDetails(up)}
+														onClick={() => {
+															setSelectedBook(null);
+															setSelectedUserBookId(null);
+															setSelectedMovie(null);
+															setSelectedUserMovieId(null);
+															selectPodcast(getPodcastWithDetails(up), up.id);
+														}}
+													/>
+												))}
 										</div>
 									)}
 								</section>
@@ -1424,14 +1674,14 @@ function DashboardPageInner() {
 							}
 						: undefined
 				}
+				onToggleRead={selectedUserBookId ? handleToggleRead : undefined}
 			/>
 
 			{/* Movie Details Sidebar */}
 			<MovieDetailsSidebar
 				movie={selectedMovie}
 				onClose={() => {
-					setSelectedMovie(null);
-					setSelectedUserMovieId(null);
+					selectMovie(null, null);
 				}}
 				onRefresh={
 					selectedMovie ? () => handleRefreshMovie(selectedMovie.id) : undefined
@@ -1440,8 +1690,7 @@ function DashboardPageInner() {
 					selectedUserMovieId
 						? async () => {
 								await handleRemoveMovie(selectedUserMovieId);
-								setSelectedMovie(null);
-								setSelectedUserMovieId(null);
+								selectMovie(null, null);
 							}
 						: undefined
 				}
@@ -1452,18 +1701,18 @@ function DashboardPageInner() {
 			<PodcastDetailsSidebar
 				podcast={selectedPodcast}
 				onClose={() => {
-					setSelectedPodcast(null);
-					setSelectedUserPodcastId(null);
+					selectPodcast(null, null);
 				}}
 				onRefresh={
-					selectedPodcast ? () => handleRefreshPodcast(selectedPodcast.id) : undefined
+					selectedPodcast
+						? () => handleRefreshPodcast(selectedPodcast.id)
+						: undefined
 				}
 				onRemove={
 					selectedUserPodcastId
 						? async () => {
 								await handleRemovePodcast(selectedUserPodcastId);
-								setSelectedPodcast(null);
-								setSelectedUserPodcastId(null);
+								selectPodcast(null, null);
 							}
 						: undefined
 				}

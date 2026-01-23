@@ -21,7 +21,7 @@ Shelf is your personal content library that you actually own and can share:
 
 ## Features
 
-- Phone OTP authentication via Supabase
+- Email/password authentication via Supabase
 - CSV bulk import for quick shelf building
 - Automatic book metadata from Google Books and Open Library
 - Smart author detection with manual override
@@ -34,7 +34,7 @@ Shelf is your personal content library that you actually own and can share:
 
 - **Framework**: Next.js 15 (App Router)
 - **Database**: Supabase PostgreSQL
-- **Auth**: Supabase Phone OTP
+- **Auth**: Supabase Email/Password
 - **Styling**: Tailwind CSS
 - **APIs**: Google Books, Open Library
 

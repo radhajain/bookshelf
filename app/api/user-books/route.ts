@@ -42,13 +42,19 @@ export async function POST(request: Request) {
 
   // If no book_id provided, find or create the book first
   if (!finalBookId && title) {
-    // Try to find existing book
-    const { data: existingBook } = await supabase
+    // Try to find existing book (case-insensitive)
+    let existingBookQuery = supabase
       .from('books')
       .select('id, genre')
-      .eq('title', title)
-      .eq('author', author || '')
-      .single();
+      .ilike('title', title);
+
+    if (author) {
+      existingBookQuery = existingBookQuery.ilike('author', author);
+    } else {
+      existingBookQuery = existingBookQuery.is('author', null);
+    }
+
+    const { data: existingBook } = await existingBookQuery.single();
 
     if (existingBook) {
       finalBookId = existingBook.id;
@@ -74,12 +80,18 @@ export async function POST(request: Request) {
       if (bookError) {
         // Handle race condition - another request created it
         if (bookError.code === '23505') {
-          const { data: book } = await supabase
+          let refetchQuery = supabase
             .from('books')
             .select('id')
-            .eq('title', title)
-            .eq('author', author || '')
-            .single();
+            .ilike('title', title);
+
+          if (author) {
+            refetchQuery = refetchQuery.ilike('author', author);
+          } else {
+            refetchQuery = refetchQuery.is('author', null);
+          }
+
+          const { data: book } = await refetchQuery.single();
           finalBookId = book?.id;
         } else {
           return NextResponse.json({ error: bookError.message }, { status: 500 });
@@ -117,6 +129,54 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(data, { status: 201 });
+}
+
+// PATCH /api/user-books - Update user book (expects ?id=xxx)
+export async function PATCH(request: Request) {
+  const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+
+  if (!id) {
+    return NextResponse.json({ error: 'id is required' }, { status: 400 });
+  }
+
+  const body = await request.json();
+  const { notes, priority, read, read_at } = body;
+
+  // Build update object with only provided fields
+  const updateData: Record<string, unknown> = {};
+  if (notes !== undefined) updateData.notes = notes;
+  if (priority !== undefined) updateData.priority = priority;
+  if (read !== undefined) updateData.read = read;
+  if (read_at !== undefined) updateData.read_at = read_at;
+
+  if (Object.keys(updateData).length === 0) {
+    return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from('user_books')
+    .update(updateData)
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select(`
+      *,
+      book:books(*)
+    `)
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json(data);
 }
 
 // DELETE /api/user-books - Remove book from shelf (expects ?id=xxx)

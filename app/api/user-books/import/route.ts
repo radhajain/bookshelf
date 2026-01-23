@@ -41,14 +41,14 @@ export async function POST(request: Request) {
       // Find or create book in catalog
       let bookId: string;
 
-      // Build query for existing book - handle null author properly
+      // Build query for existing book - handle null author properly (case-insensitive)
       let existingBookQuery = supabase
         .from('books')
         .select('id')
-        .eq('title', book.title);
+        .ilike('title', book.title);
 
       if (book.author) {
-        existingBookQuery = existingBookQuery.eq('author', book.author);
+        existingBookQuery = existingBookQuery.ilike('author', book.author);
       } else {
         existingBookQuery = existingBookQuery.is('author', null);
       }
@@ -77,15 +77,15 @@ export async function POST(request: Request) {
           .single();
 
         if (bookError) {
-          // Race condition - try to fetch again
+          // Race condition - try to fetch again (case-insensitive)
           if (bookError.code === '23505') {
             let refetchQuery = supabase
               .from('books')
               .select('id')
-              .eq('title', book.title);
+              .ilike('title', book.title);
 
             if (book.author) {
-              refetchQuery = refetchQuery.eq('author', book.author);
+              refetchQuery = refetchQuery.ilike('author', book.author);
             } else {
               refetchQuery = refetchQuery.is('author', null);
             }

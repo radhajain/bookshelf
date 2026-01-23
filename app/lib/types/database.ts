@@ -39,6 +39,8 @@ export interface DbUserBook {
   book_id: string;
   notes: string | null;
   priority: string | null;
+  read: boolean;
+  read_at: string | null;
   created_at: string;
 }
 
@@ -62,6 +64,8 @@ export interface CreateUserBookInput {
 export interface UpdateUserBookInput {
   notes?: string;
   priority?: string;
+  read?: boolean;
+  read_at?: string | null;
 }
 
 export interface UpdateBookInput {

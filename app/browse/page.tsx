@@ -1,11 +1,18 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useAuth } from '@/app/components/auth/AuthProvider';
 import { DbBook, DbMovie, DbPodcast } from '@/app/lib/types/database';
+import { BookWithDetails, RatingSource } from '@/app/lib/books';
+import { MovieWithDetails, MovieRatingSource } from '@/app/lib/movies';
+import { PodcastWithDetails, PodcastRatingSource } from '@/app/lib/podcasts';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import LoginModal from '@/app/components/auth/LoginModal';
+import BookDetailsSidebar from '@/app/components/BookDetailsSidebar';
+import MovieDetailsSidebar from '@/app/components/movies/MovieDetailsSidebar';
+import PodcastDetailsSidebar from '@/app/components/podcasts/PodcastDetailsSidebar';
 
 interface BookWithShelfStatus extends DbBook {
   inMyShelf: boolean;
@@ -21,7 +28,140 @@ interface PodcastWithShelfStatus extends DbPodcast {
 
 type MediaTypeFilter = 'all' | 'books' | 'movies' | 'podcasts';
 
-export default function BrowsePage() {
+// Convert DB book to BookWithDetails format for sidebar
+function dbBookToBookWithDetails(dbBook: DbBook): BookWithDetails {
+  const ratings: RatingSource[] = [];
+  if (dbBook.google_rating) {
+    ratings.push({
+      source: 'Google Books',
+      rating: dbBook.google_rating,
+      ratingsCount: dbBook.google_ratings_count || undefined,
+    });
+  }
+  if (dbBook.open_library_rating) {
+    ratings.push({
+      source: 'Open Library',
+      rating: dbBook.open_library_rating,
+      ratingsCount: dbBook.open_library_ratings_count || undefined,
+    });
+  }
+  return {
+    id: dbBook.id,
+    title: dbBook.title,
+    author: dbBook.author || undefined,
+    genre: dbBook.genre || 'Uncategorized',
+    pages: dbBook.page_count || undefined,
+    description: dbBook.description || undefined,
+    coverImage: dbBook.cover_image || undefined,
+    isbn: dbBook.isbn || undefined,
+    publishedDate: dbBook.published_date || undefined,
+    publisher: dbBook.publisher || undefined,
+    subjects: dbBook.subjects || undefined,
+    ratings,
+    goodreadsUrl: dbBook.goodreads_url || undefined,
+    amazonUrl: dbBook.amazon_url || undefined,
+    detailsFetchedAt: dbBook.details_fetched_at || undefined,
+  };
+}
+
+// Convert DB movie to MovieWithDetails format for sidebar
+function dbMovieToMovieWithDetails(dbMovie: DbMovie): MovieWithDetails {
+  const ratings: MovieRatingSource[] = [];
+  if (dbMovie.tmdb_rating) {
+    ratings.push({
+      source: 'TMDB',
+      rating: dbMovie.tmdb_rating,
+      ratingsCount: dbMovie.tmdb_ratings_count || undefined,
+      displayFormat: 'stars',
+    });
+  }
+  if (dbMovie.rotten_tomatoes_score) {
+    ratings.push({
+      source: 'Rotten Tomatoes',
+      rating: dbMovie.rotten_tomatoes_score,
+      displayFormat: 'percentage',
+    });
+  }
+  if (dbMovie.metacritic_score) {
+    ratings.push({
+      source: 'Metacritic',
+      rating: dbMovie.metacritic_score,
+      displayFormat: 'score',
+    });
+  }
+  if (dbMovie.imdb_rating) {
+    ratings.push({
+      source: 'IMDb',
+      rating: dbMovie.imdb_rating,
+      ratingsCount: dbMovie.imdb_ratings_count || undefined,
+      url: dbMovie.imdb_url || undefined,
+      displayFormat: 'stars',
+    });
+  }
+  return {
+    id: dbMovie.id,
+    title: dbMovie.title,
+    director: dbMovie.director || undefined,
+    year: dbMovie.year || undefined,
+    genre: dbMovie.genres?.[0] || 'Uncategorized',
+    runtime: dbMovie.runtime_minutes || undefined,
+    description: dbMovie.description || undefined,
+    tagline: dbMovie.tagline || undefined,
+    posterImage: dbMovie.poster_image || undefined,
+    backdropImage: dbMovie.backdrop_image || undefined,
+    cast: dbMovie.cast_members || undefined,
+    genres: dbMovie.genres || undefined,
+    tmdbId: dbMovie.tmdb_id || undefined,
+    imdbId: dbMovie.imdb_id || undefined,
+    releaseDate: dbMovie.release_date || undefined,
+    budget: dbMovie.budget || undefined,
+    revenue: dbMovie.revenue || undefined,
+    productionCompanies: dbMovie.production_companies || undefined,
+    imdbUrl: dbMovie.imdb_url || undefined,
+    letterboxdUrl: dbMovie.letterboxd_url || undefined,
+    ratings,
+    detailsFetchedAt: dbMovie.details_fetched_at || undefined,
+  };
+}
+
+// Convert DB podcast to PodcastWithDetails format for sidebar
+function dbPodcastToPodcastWithDetails(dbPodcast: DbPodcast): PodcastWithDetails {
+  const ratings: PodcastRatingSource[] = [];
+  if (dbPodcast.itunes_id) {
+    ratings.push({
+      source: 'Apple Podcasts',
+      url: `https://podcasts.apple.com/podcast/id${dbPodcast.itunes_id}`,
+    });
+  }
+  if (dbPodcast.podcast_index_id) {
+    ratings.push({
+      source: 'Podcast Index',
+      url: `https://podcastindex.org/podcast/${dbPodcast.podcast_index_id}`,
+    });
+  }
+  return {
+    id: dbPodcast.id,
+    title: dbPodcast.title,
+    creator: dbPodcast.creator || undefined,
+    genre: dbPodcast.genres?.[0] || 'Uncategorized',
+    description: dbPodcast.description || undefined,
+    coverImage: dbPodcast.cover_image || undefined,
+    podcastIndexId: dbPodcast.podcast_index_id || undefined,
+    itunesId: dbPodcast.itunes_id || undefined,
+    rssFeedUrl: dbPodcast.rss_feed_url || undefined,
+    totalEpisodes: dbPodcast.total_episodes || undefined,
+    genres: dbPodcast.genres || undefined,
+    language: dbPodcast.language || undefined,
+    publisher: dbPodcast.publisher || undefined,
+    websiteUrl: dbPodcast.website_url || undefined,
+    ratings,
+    detailsFetchedAt: dbPodcast.details_fetched_at || undefined,
+  };
+}
+
+function BrowsePageInner() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [books, setBooks] = useState<BookWithShelfStatus[]>([]);
   const [movies, setMovies] = useState<MovieWithShelfStatus[]>([]);
@@ -37,6 +177,11 @@ export default function BrowsePage() {
   const [addingMovieId, setAddingMovieId] = useState<string | null>(null);
   const [addingPodcastId, setAddingPodcastId] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // Sidebar state
+  const [selectedBook, setSelectedBook] = useState<BookWithDetails | null>(null);
+  const [selectedMovie, setSelectedMovie] = useState<MovieWithDetails | null>(null);
+  const [selectedPodcast, setSelectedPodcast] = useState<PodcastWithDetails | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -154,6 +299,133 @@ export default function BrowsePage() {
     }
   };
 
+  // Selection handlers with URL updates
+  const selectBook = useCallback((book: BookWithShelfStatus | null) => {
+    if (book) {
+      setSelectedBook(dbBookToBookWithDetails(book));
+      setSelectedMovie(null);
+      setSelectedPodcast(null);
+      router.push(`/browse?book=${book.id}`, { scroll: false });
+    } else {
+      setSelectedBook(null);
+      router.push('/browse', { scroll: false });
+    }
+  }, [router]);
+
+  const selectMovie = useCallback((movie: MovieWithShelfStatus | null) => {
+    if (movie) {
+      setSelectedMovie(dbMovieToMovieWithDetails(movie));
+      setSelectedBook(null);
+      setSelectedPodcast(null);
+      router.push(`/browse?movie=${movie.id}`, { scroll: false });
+    } else {
+      setSelectedMovie(null);
+      router.push('/browse', { scroll: false });
+    }
+  }, [router]);
+
+  const selectPodcast = useCallback((podcast: PodcastWithShelfStatus | null) => {
+    if (podcast) {
+      setSelectedPodcast(dbPodcastToPodcastWithDetails(podcast));
+      setSelectedBook(null);
+      setSelectedMovie(null);
+      router.push(`/browse?podcast=${podcast.id}`, { scroll: false });
+    } else {
+      setSelectedPodcast(null);
+      router.push('/browse', { scroll: false });
+    }
+  }, [router]);
+
+  // Handle deep linking - open item from URL param
+  useEffect(() => {
+    if (loading) return;
+
+    const bookId = searchParams.get('book');
+    const movieId = searchParams.get('movie');
+    const podcastId = searchParams.get('podcast');
+
+    if (bookId) {
+      const book = books.find(b => b.id === bookId);
+      if (book) {
+        setSelectedBook(dbBookToBookWithDetails(book));
+        setSelectedMovie(null);
+        setSelectedPodcast(null);
+      }
+    } else if (movieId) {
+      const movie = movies.find(m => m.id === movieId);
+      if (movie) {
+        setSelectedMovie(dbMovieToMovieWithDetails(movie));
+        setSelectedBook(null);
+        setSelectedPodcast(null);
+      }
+    } else if (podcastId) {
+      const podcast = podcasts.find(p => p.id === podcastId);
+      if (podcast) {
+        setSelectedPodcast(dbPodcastToPodcastWithDetails(podcast));
+        setSelectedBook(null);
+        setSelectedMovie(null);
+      }
+    }
+  }, [searchParams, books, movies, podcasts, loading]);
+
+  // Refresh handlers for sidebars - fetch fresh details from API and update both sidebar and list
+  const handleRefreshBook = useCallback(async (bookId: string): Promise<BookWithDetails | null> => {
+    try {
+      const response = await fetch(`/api/books/${bookId}/details`, { method: 'POST' });
+      if (response.ok) {
+        const data = await response.json();
+        const updatedBook = data.book as DbBook;
+        // Update the books list
+        setBooks(prev => prev.map(b => b.id === bookId ? { ...updatedBook, inMyShelf: b.inMyShelf } : b));
+        // Update the selected book in sidebar
+        const bookWithDetails = dbBookToBookWithDetails(updatedBook);
+        setSelectedBook(bookWithDetails);
+        return bookWithDetails;
+      }
+    } catch (error) {
+      console.error('Error refreshing book:', error);
+    }
+    return null;
+  }, []);
+
+  const handleRefreshMovie = useCallback(async (movieId: string): Promise<MovieWithDetails | null> => {
+    try {
+      const response = await fetch(`/api/movies/${movieId}/details`, { method: 'POST' });
+      if (response.ok) {
+        const data = await response.json();
+        const updatedMovie = data.movie as DbMovie;
+        // Update the movies list
+        setMovies(prev => prev.map(m => m.id === movieId ? { ...updatedMovie, inMyShelf: m.inMyShelf } : m));
+        // Update the selected movie in sidebar
+        const movieWithDetails = dbMovieToMovieWithDetails(updatedMovie);
+        setSelectedMovie(movieWithDetails);
+        return movieWithDetails;
+      }
+    } catch (error) {
+      console.error('Error refreshing movie:', error);
+    }
+    return null;
+  }, []);
+
+  const handleRefreshPodcast = useCallback(async (podcastId: string): Promise<PodcastWithDetails | null> => {
+    try {
+      const response = await fetch(`/api/podcasts/${podcastId}/details`, { method: 'POST' });
+      if (response.ok) {
+        const data = await response.json();
+        const updatedPodcast = data.podcast as DbPodcast;
+        // Update the podcasts list
+        setPodcasts(prev => prev.map(p => p.id === podcastId ? { ...updatedPodcast, inMyShelf: p.inMyShelf } : p));
+        // Update the selected podcast in sidebar
+        const podcastWithDetails = dbPodcastToPodcastWithDetails(updatedPodcast);
+        setSelectedPodcast(podcastWithDetails);
+        return podcastWithDetails;
+      }
+    } catch (error) {
+      console.error('Error refreshing podcast:', error);
+    }
+    return null;
+  }, []);
+
   // Filter items based on media type
   const filteredBooks = mediaTypeFilter === 'all' || mediaTypeFilter === 'books' ? books : [];
   const filteredMovies = mediaTypeFilter === 'all' || mediaTypeFilter === 'movies' ? movies : [];
@@ -191,7 +463,7 @@ export default function BrowsePage() {
                     href="/dashboard/settings"
                     className="px-3 py-2 text-sm text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
                   >
-                    Settings
+                    Profile
                   </Link>
                 </>
               ) : (
@@ -315,7 +587,8 @@ export default function BrowsePage() {
             {filteredBooks.map((book) => (
               <div
                 key={`book-${book.id}`}
-                className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden hover:shadow-md transition-shadow flex flex-col"
+                onClick={() => selectBook(book)}
+                className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden hover:shadow-md transition-shadow flex flex-col cursor-pointer"
               >
                 {/* Book Cover */}
                 <div className="aspect-[2/3] bg-gradient-to-br from-zinc-100 to-zinc-200 relative">
@@ -395,7 +668,7 @@ export default function BrowsePage() {
                   {/* Add to Shelf Button */}
                   {user && !book.inMyShelf && (
                     <button
-                      onClick={() => handleAddBookToShelf(book)}
+                      onClick={(e) => { e.stopPropagation(); handleAddBookToShelf(book); }}
                       disabled={addingBookId === book.id}
                       className="w-full px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-auto"
                     >
@@ -417,7 +690,8 @@ export default function BrowsePage() {
 
                   {book.inMyShelf && (
                     <Link
-                      href="/dashboard"
+                      href={`/dashboard?book=${book.id}`}
+                      onClick={(e) => e.stopPropagation()}
                       className="block w-full px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg transition-colors text-center mt-auto"
                     >
                       View in My Shelf
@@ -426,7 +700,7 @@ export default function BrowsePage() {
 
                   {!user && (
                     <button
-                      onClick={() => setShowLoginModal(true)}
+                      onClick={(e) => { e.stopPropagation(); setShowLoginModal(true); }}
                       className="w-full px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 mt-auto"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -443,7 +717,8 @@ export default function BrowsePage() {
             {filteredMovies.map((movie) => (
               <div
                 key={`movie-${movie.id}`}
-                className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden hover:shadow-md transition-shadow flex flex-col"
+                onClick={() => selectMovie(movie)}
+                className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden hover:shadow-md transition-shadow flex flex-col cursor-pointer"
               >
                 {/* Movie Poster */}
                 <div className="aspect-[2/3] bg-gradient-to-br from-zinc-100 to-zinc-200 relative">
@@ -532,7 +807,7 @@ export default function BrowsePage() {
                   {/* Add to Shelf Button */}
                   {user && !movie.inMyShelf && (
                     <button
-                      onClick={() => handleAddMovieToShelf(movie)}
+                      onClick={(e) => { e.stopPropagation(); handleAddMovieToShelf(movie); }}
                       disabled={addingMovieId === movie.id}
                       className="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-auto"
                     >
@@ -554,7 +829,8 @@ export default function BrowsePage() {
 
                   {movie.inMyShelf && (
                     <Link
-                      href="/dashboard"
+                      href={`/dashboard?movie=${movie.id}`}
+                      onClick={(e) => e.stopPropagation()}
                       className="block w-full px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg transition-colors text-center mt-auto"
                     >
                       View in My Shelf
@@ -563,7 +839,7 @@ export default function BrowsePage() {
 
                   {!user && (
                     <button
-                      onClick={() => setShowLoginModal(true)}
+                      onClick={(e) => { e.stopPropagation(); setShowLoginModal(true); }}
                       className="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 mt-auto"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -580,7 +856,8 @@ export default function BrowsePage() {
             {filteredPodcasts.map((podcast) => (
               <div
                 key={`podcast-${podcast.id}`}
-                className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden hover:shadow-md transition-shadow flex flex-col"
+                onClick={() => selectPodcast(podcast)}
+                className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden hover:shadow-md transition-shadow flex flex-col cursor-pointer"
               >
                 {/* Podcast Cover */}
                 <div className="aspect-square bg-gradient-to-br from-purple-100 to-purple-200 relative">
@@ -667,7 +944,7 @@ export default function BrowsePage() {
                   {/* Add to Shelf Button */}
                   {user && !podcast.inMyShelf && (
                     <button
-                      onClick={() => handleAddPodcastToShelf(podcast)}
+                      onClick={(e) => { e.stopPropagation(); handleAddPodcastToShelf(podcast); }}
                       disabled={addingPodcastId === podcast.id}
                       className="w-full px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-auto"
                     >
@@ -689,7 +966,8 @@ export default function BrowsePage() {
 
                   {podcast.inMyShelf && (
                     <Link
-                      href="/dashboard"
+                      href={`/dashboard?podcast=${podcast.id}`}
+                      onClick={(e) => e.stopPropagation()}
                       className="block w-full px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg transition-colors text-center mt-auto"
                     >
                       View in My Shelf
@@ -698,7 +976,7 @@ export default function BrowsePage() {
 
                   {!user && (
                     <button
-                      onClick={() => setShowLoginModal(true)}
+                      onClick={(e) => { e.stopPropagation(); setShowLoginModal(true); }}
                       className="w-full px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 mt-auto"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -726,6 +1004,51 @@ export default function BrowsePage() {
           message="Sign in to add items to your shelf"
         />
       )}
+
+      {/* Book Details Sidebar */}
+      <BookDetailsSidebar
+        book={selectedBook}
+        onClose={() => {
+          setSelectedBook(null);
+          router.push('/browse', { scroll: false });
+        }}
+        onRefresh={selectedBook ? () => handleRefreshBook(selectedBook.id) : undefined}
+      />
+
+      {/* Movie Details Sidebar */}
+      <MovieDetailsSidebar
+        movie={selectedMovie}
+        onClose={() => {
+          setSelectedMovie(null);
+          router.push('/browse', { scroll: false });
+        }}
+        onRefresh={selectedMovie ? () => handleRefreshMovie(selectedMovie.id) : undefined}
+      />
+
+      {/* Podcast Details Sidebar */}
+      <PodcastDetailsSidebar
+        podcast={selectedPodcast}
+        onClose={() => {
+          setSelectedPodcast(null);
+          router.push('/browse', { scroll: false });
+        }}
+        onRefresh={selectedPodcast ? () => handleRefreshPodcast(selectedPodcast.id) : undefined}
+      />
     </div>
+  );
+}
+
+// Main component with Suspense boundary for useSearchParams
+export default function BrowsePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white flex items-center justify-center">
+          <div className="w-16 h-16 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <BrowsePageInner />
+    </Suspense>
   );
 }
