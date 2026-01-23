@@ -1,5 +1,6 @@
 import { BookWithDetails, RatingSource } from '@/app/lib/books';
 import { MovieWithDetails, MovieRatingSource } from '@/app/lib/movies';
+import { PodcastWithDetails, PodcastRatingSource } from '@/app/lib/podcasts';
 import { createClient } from '@/app/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import PublicBookshelf from './PublicBookshelf';
@@ -61,6 +62,18 @@ function buildMovieRatings(movie: any): MovieRatingSource[] {
 	return ratings;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildPodcastRatings(podcast: any): PodcastRatingSource[] {
+	const ratings: PodcastRatingSource[] = [];
+	if (podcast.podcast_index_rating) {
+		ratings.push({
+			source: 'Podcast Index',
+			rating: podcast.podcast_index_rating,
+		});
+	}
+	return ratings;
+}
+
 interface PageProps {
 	params: Promise<{ username: string }>;
 }
@@ -80,8 +93,8 @@ export default async function PublicProfilePage({ params }: PageProps) {
 		notFound();
 	}
 
-	// Fetch user's books and movies in parallel
-	const [booksResult, moviesResult] = await Promise.all([
+	// Fetch user's books, movies, and podcasts in parallel
+	const [booksResult, moviesResult, podcastsResult] = await Promise.all([
 		supabase
 			.from('user_books')
 			.select(`
@@ -98,6 +111,14 @@ export default async function PublicProfilePage({ params }: PageProps) {
 			`)
 			.eq('user_id', profile.id)
 			.order('created_at', { ascending: false }),
+		supabase
+			.from('user_podcasts')
+			.select(`
+				*,
+				podcast:podcasts(*)
+			`)
+			.eq('user_id', profile.id)
+			.order('created_at', { ascending: false }),
 	]);
 
 	if (booksResult.error) {
@@ -105,6 +126,9 @@ export default async function PublicProfilePage({ params }: PageProps) {
 	}
 	if (moviesResult.error) {
 		console.error('Error fetching movies:', moviesResult.error);
+	}
+	if (podcastsResult.error) {
+		console.error('Error fetching podcasts:', podcastsResult.error);
 	}
 
 	// Convert to BookWithDetails format with all cached details
@@ -157,6 +181,28 @@ export default async function PublicProfilePage({ params }: PageProps) {
 		detailsFetchedAt: um.movie.details_fetched_at || undefined,
 	}));
 
+	// Convert to PodcastWithDetails format with all cached details
+	const podcasts: PodcastWithDetails[] = (podcastsResult.data || []).map((up) => ({
+		id: up.podcast_id,
+		title: up.podcast.title,
+		creator: up.podcast.creator || undefined,
+		genre: up.genre || (up.podcast.genres?.[0]) || 'Uncategorized',
+		notes: up.notes || undefined,
+		priority: up.priority || undefined,
+		description: up.podcast.description || undefined,
+		coverImage: up.podcast.cover_image || undefined,
+		podcastIndexId: up.podcast.podcast_index_id || undefined,
+		itunesId: up.podcast.itunes_id || undefined,
+		rssFeedUrl: up.podcast.rss_feed_url || undefined,
+		totalEpisodes: up.podcast.total_episodes || undefined,
+		genres: up.podcast.genres || undefined,
+		language: up.podcast.language || undefined,
+		publisher: up.podcast.publisher || undefined,
+		websiteUrl: up.podcast.website_url || undefined,
+		ratings: buildPodcastRatings(up.podcast),
+		detailsFetchedAt: up.podcast.details_fetched_at || undefined,
+	}));
+
 	// Group books by genre
 	const booksByGenre = books.reduce(
 		(acc, book) => {
@@ -179,10 +225,22 @@ export default async function PublicProfilePage({ params }: PageProps) {
 		{} as Record<string, MovieWithDetails[]>,
 	);
 
-	// Combined genres (union of book and movie genres)
+	// Group podcasts by genre
+	const podcastsByGenre = podcasts.reduce(
+		(acc, podcast) => {
+			const genre = podcast.genre || 'Uncategorized';
+			if (!acc[genre]) acc[genre] = [];
+			acc[genre].push(podcast);
+			return acc;
+		},
+		{} as Record<string, PodcastWithDetails[]>,
+	);
+
+	// Combined genres (union of book, movie, and podcast genres)
 	const allGenres = new Set([
 		...Object.keys(booksByGenre),
 		...Object.keys(moviesByGenre),
+		...Object.keys(podcastsByGenre),
 	]);
 
 	const sortedGenres = Array.from(allGenres).sort((a, b) => {
@@ -196,8 +254,10 @@ export default async function PublicProfilePage({ params }: PageProps) {
 			profile={profile}
 			books={books}
 			movies={movies}
+			podcasts={podcasts}
 			booksByGenre={booksByGenre}
 			moviesByGenre={moviesByGenre}
+			podcastsByGenre={podcastsByGenre}
 			sortedGenres={sortedGenres}
 		/>
 	);

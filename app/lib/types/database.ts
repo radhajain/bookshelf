@@ -160,3 +160,71 @@ export interface UpdateMovieInput {
   year?: number;
   genres?: string[];
 }
+
+// =============================================
+// Podcast Types
+// =============================================
+
+export interface DbPodcast {
+  id: string;
+  title: string;
+  creator: string | null;
+  description: string | null;
+  cover_image: string | null;
+  // External IDs
+  podcast_index_id: number | null;
+  itunes_id: string | null;
+  rss_feed_url: string | null;
+  // Cached data from APIs
+  podcast_index_rating: number | null;
+  itunes_rating: number | null;
+  itunes_ratings_count: number | null;
+  total_episodes: number | null;
+  // Additional metadata
+  genres: string[] | null;
+  language: string | null;
+  publisher: string | null;
+  website_url: string | null;
+  // Caching and tracking
+  details_fetched_at: string | null;
+  created_at: string;
+}
+
+export interface DbUserPodcast {
+  id: string;
+  user_id: string;
+  podcast_id: string;
+  genre: string | null;
+  notes: string | null;
+  priority: string | null;
+  created_at: string;
+}
+
+// Joined type for fetching user's podcasts with podcast details
+export interface UserPodcastWithDetails extends DbUserPodcast {
+  podcast: DbPodcast;
+}
+
+// Input types for creating/updating podcasts
+export interface CreatePodcastInput {
+  title: string;
+  creator?: string;
+}
+
+export interface CreateUserPodcastInput {
+  podcast_id: string;
+  genre?: string;
+  notes?: string;
+  priority?: string;
+}
+
+export interface UpdateUserPodcastInput {
+  genre?: string;
+  notes?: string;
+  priority?: string;
+}
+
+export interface UpdatePodcastInput {
+  creator?: string;
+  genres?: string[];
+}

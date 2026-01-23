@@ -3,22 +3,26 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useAuth } from '@/app/components/auth/AuthProvider';
 import { createClient } from '@/app/lib/supabase/client';
-import { UserBookWithDetails, DbBook, UserMovieWithDetails, DbMovie } from '@/app/lib/types/database';
+import { UserBookWithDetails, DbBook, UserMovieWithDetails, DbMovie, UserPodcastWithDetails, DbPodcast } from '@/app/lib/types/database';
 import { BookWithDetails, RatingSource } from '@/app/lib/books';
 import { MovieWithDetails, MovieRatingSource } from '@/app/lib/movies';
+import { PodcastWithDetails, PodcastRatingSource } from '@/app/lib/podcasts';
 import { RateLimitError } from '@/app/lib/bookApi';
 import BookCard from '@/app/components/BookCard';
 import BookDetailsSidebar from '@/app/components/BookDetailsSidebar';
 import MovieCard from '@/app/components/movies/MovieCard';
 import MovieDetailsSidebar from '@/app/components/movies/MovieDetailsSidebar';
+import PodcastCard from '@/app/components/PodcastCard';
+import PodcastDetailsSidebar from '@/app/components/podcasts/PodcastDetailsSidebar';
 import AddBookModal from '@/app/components/books/AddBookModal';
 import AddMovieModal from '@/app/components/movies/AddMovieModal';
+import AddPodcastModal from '@/app/components/podcasts/AddPodcastModal';
 import CSVUploadModal from '@/app/components/books/CSVUploadModal';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 // Media type filter
-type MediaTypeFilter = 'all' | 'books' | 'movies';
+type MediaTypeFilter = 'all' | 'books' | 'movies' | 'podcasts';
 
 // Convert DB book to BookWithDetails format
 function dbBookToBookWithDetails(
@@ -138,17 +142,64 @@ function dbMovieToMovieWithDetails(
 	};
 }
 
+// Convert DB podcast to PodcastWithDetails format
+function dbPodcastToPodcastWithDetails(
+	dbPodcast: DbPodcast,
+	userPodcast?: UserPodcastWithDetails,
+): PodcastWithDetails {
+	const ratings: PodcastRatingSource[] = [];
+
+	if (dbPodcast.itunes_id) {
+		ratings.push({
+			source: 'Apple Podcasts',
+			url: `https://podcasts.apple.com/podcast/id${dbPodcast.itunes_id}`,
+		});
+	}
+
+	if (dbPodcast.podcast_index_id) {
+		ratings.push({
+			source: 'Podcast Index',
+			url: `https://podcastindex.org/podcast/${dbPodcast.podcast_index_id}`,
+		});
+	}
+
+	return {
+		id: dbPodcast.id,
+		title: dbPodcast.title,
+		creator: dbPodcast.creator || undefined,
+		genre: userPodcast?.genre || (dbPodcast.genres?.[0]) || 'Uncategorized',
+		notes: userPodcast?.notes || undefined,
+		priority: userPodcast?.priority || undefined,
+		description: dbPodcast.description || undefined,
+		coverImage: dbPodcast.cover_image || undefined,
+		podcastIndexId: dbPodcast.podcast_index_id || undefined,
+		itunesId: dbPodcast.itunes_id || undefined,
+		rssFeedUrl: dbPodcast.rss_feed_url || undefined,
+		totalEpisodes: dbPodcast.total_episodes || undefined,
+		genres: dbPodcast.genres || undefined,
+		language: dbPodcast.language || undefined,
+		publisher: dbPodcast.publisher || undefined,
+		websiteUrl: dbPodcast.website_url || undefined,
+		ratings,
+		detailsFetchedAt: dbPodcast.details_fetched_at || undefined,
+	};
+}
+
 function DashboardPageInner() {
 	const searchParams = useSearchParams();
 	const router = useRouter();
 	const { user, profile, signOut, loading: authLoading } = useAuth();
 	const [userBooks, setUserBooks] = useState<UserBookWithDetails[]>([]);
 	const [userMovies, setUserMovies] = useState<UserMovieWithDetails[]>([]);
+	const [userPodcasts, setUserPodcasts] = useState<UserPodcastWithDetails[]>([]);
 	const [enrichedBooks, setEnrichedBooks] = useState<
 		Map<string, BookWithDetails>
 	>(new Map());
 	const [enrichedMovies, setEnrichedMovies] = useState<
 		Map<string, MovieWithDetails>
+	>(new Map());
+	const [enrichedPodcasts, setEnrichedPodcasts] = useState<
+		Map<string, PodcastWithDetails>
 	>(new Map());
 	const [loading, setLoading] = useState(true);
 	const [loadingProgress, setLoadingProgress] = useState({
@@ -161,14 +212,21 @@ function DashboardPageInner() {
 	const [selectedMovie, setSelectedMovie] = useState<MovieWithDetails | null>(
 		null,
 	);
+	const [selectedPodcast, setSelectedPodcast] = useState<PodcastWithDetails | null>(
+		null,
+	);
 	const [selectedUserBookId, setSelectedUserBookId] = useState<string | null>(
 		null,
 	);
 	const [selectedUserMovieId, setSelectedUserMovieId] = useState<string | null>(
 		null,
 	);
+	const [selectedUserPodcastId, setSelectedUserPodcastId] = useState<string | null>(
+		null,
+	);
 	const [showAddModal, setShowAddModal] = useState(false);
 	const [showAddMovieModal, setShowAddMovieModal] = useState(false);
+	const [showAddPodcastModal, setShowAddPodcastModal] = useState(false);
 	const [showCSVModal, setShowCSVModal] = useState(false);
 	const [isEnrichmentPaused, setIsEnrichmentPaused] = useState(false);
 	const [isEnriching, setIsEnriching] = useState(false);
@@ -311,6 +369,37 @@ function DashboardPageInner() {
 		[],
 	);
 
+	const enrichPodcasts = useCallback(
+		async (podcasts: UserPodcastWithDetails[]) => {
+			const enriched = new Map<string, PodcastWithDetails>();
+
+			for (const up of podcasts) {
+				// Check if podcast already has cached details
+				if (up.podcast.details_fetched_at) {
+					// Use cached data from database
+					enriched.set(up.podcast_id, dbPodcastToPodcastWithDetails(up.podcast, up));
+					setEnrichedPodcasts(new Map(enriched));
+				} else if (!enriched.has(up.podcast_id)) {
+					// Fetch and cache details via API
+					try {
+						const response = await fetch(`/api/podcasts/${up.podcast_id}/details`);
+						if (response.ok) {
+							const { podcast: updatedPodcast } = await response.json();
+							enriched.set(
+								up.podcast_id,
+								dbPodcastToPodcastWithDetails(updatedPodcast, up),
+							);
+							setEnrichedPodcasts(new Map(enriched));
+						}
+					} catch (error) {
+						console.error('Error fetching podcast details:', error);
+					}
+				}
+			}
+		},
+		[],
+	);
+
 	useEffect(() => {
 		if (!user) return;
 
@@ -319,8 +408,8 @@ function DashboardPageInner() {
 		const fetchData = async () => {
 			setLoading(true);
 
-			// Fetch books and movies in parallel
-			const [booksResult, moviesResult] = await Promise.all([
+			// Fetch books, movies, and podcasts in parallel
+			const [booksResult, moviesResult, podcastsResult] = await Promise.all([
 				supabase
 					.from('user_books')
 					.select(`
@@ -337,6 +426,14 @@ function DashboardPageInner() {
 					`)
 					.eq('user_id', user.id)
 					.order('created_at', { ascending: false }),
+				supabase
+					.from('user_podcasts')
+					.select(`
+						*,
+						podcast:podcasts(*)
+					`)
+					.eq('user_id', user.id)
+					.order('created_at', { ascending: false }),
 			]);
 
 			if (!cancelled) {
@@ -350,6 +447,11 @@ function DashboardPageInner() {
 					// Enrich movies in background
 					enrichMovies(moviesResult.data as UserMovieWithDetails[]);
 				}
+				if (!podcastsResult.error && podcastsResult.data) {
+					setUserPodcasts(podcastsResult.data as UserPodcastWithDetails[]);
+					// Enrich podcasts in background
+					enrichPodcasts(podcastsResult.data as UserPodcastWithDetails[]);
+				}
 				setLoading(false);
 			}
 		};
@@ -359,7 +461,7 @@ function DashboardPageInner() {
 		return () => {
 			cancelled = true;
 		};
-	}, [user, supabase, enrichBooks, enrichMovies]);
+	}, [user, supabase, enrichBooks, enrichMovies, enrichPodcasts]);
 
 	// Update URL when selecting/deselecting a book
 	const selectBook = useCallback(
@@ -452,6 +554,25 @@ function DashboardPageInner() {
 		}
 	}, [user, supabase, enrichMovies]);
 
+	const reloadPodcasts = useCallback(async () => {
+		if (!user) return;
+		const { data, error } = await supabase
+			.from('user_podcasts')
+			.select(
+				`
+				*,
+				podcast:podcasts(*)
+			`,
+			)
+			.eq('user_id', user.id)
+			.order('created_at', { ascending: false });
+
+		if (!error && data) {
+			setUserPodcasts(data as UserPodcastWithDetails[]);
+			enrichPodcasts(data as UserPodcastWithDetails[]);
+		}
+	}, [user, supabase, enrichPodcasts]);
+
 	const handleBookAdded = useCallback(() => {
 		void reloadBooks();
 		setShowAddModal(false);
@@ -462,6 +583,11 @@ function DashboardPageInner() {
 		void reloadMovies();
 		setShowAddMovieModal(false);
 	}, [reloadMovies]);
+
+	const handlePodcastAdded = useCallback(() => {
+		void reloadPodcasts();
+		setShowAddPodcastModal(false);
+	}, [reloadPodcasts]);
 
 	const handleRemoveBook = async (userBookId: string) => {
 		const { error } = await supabase
@@ -486,6 +612,53 @@ function DashboardPageInner() {
 			setSelectedMovie(null);
 		}
 	};
+
+	const handleRemovePodcast = async (userPodcastId: string) => {
+		const { error } = await supabase
+			.from('user_podcasts')
+			.delete()
+			.eq('id', userPodcastId);
+
+		if (!error) {
+			setUserPodcasts(userPodcasts.filter((up) => up.id !== userPodcastId));
+			setSelectedPodcast(null);
+		}
+	};
+
+	const handleRefreshPodcast = useCallback(
+		async (podcastId: string) => {
+			try {
+				const response = await fetch(`/api/podcasts/${podcastId}/details`, {
+					method: 'POST',
+				});
+				if (response.ok) {
+					const { podcast: updatedPodcast } = await response.json();
+					const userPodcast = userPodcasts.find((up) => up.podcast_id === podcastId);
+					const podcastWithDetails = dbPodcastToPodcastWithDetails(
+						updatedPodcast,
+						userPodcast,
+					);
+
+					setEnrichedPodcasts((prev) => {
+						const next = new Map(prev);
+						next.set(podcastId, podcastWithDetails);
+						return next;
+					});
+
+					// Update selected podcast if it's the one being refreshed
+					if (selectedPodcast?.id === podcastId) {
+						setSelectedPodcast(podcastWithDetails);
+					}
+
+					return podcastWithDetails;
+				}
+			} catch (error) {
+				console.error('Error refreshing podcast details:', error);
+			}
+			return null;
+		},
+		[userPodcasts, selectedPodcast],
+	);
 
 	const handleRefreshMovie = useCallback(
 		async (movieId: string) => {
@@ -609,6 +782,33 @@ function DashboardPageInner() {
 		[enrichedMovies],
 	);
 
+	// Convert UserPodcast to PodcastWithDetails for display
+	const getPodcastWithDetails = useCallback(
+		(up: UserPodcastWithDetails): PodcastWithDetails => {
+			const enriched = enrichedPodcasts.get(up.podcast_id);
+			if (enriched) {
+				return {
+					...enriched,
+					notes: up.notes || undefined,
+					priority: up.priority || undefined,
+				};
+			}
+			return {
+				id: up.podcast_id,
+				title: up.podcast.title,
+				creator: up.podcast.creator || undefined,
+				genre: up.genre || (up.podcast.genres?.[0]) || 'Uncategorized',
+				notes: up.notes || undefined,
+				priority: up.priority || undefined,
+				description: up.podcast.description || undefined,
+				coverImage: up.podcast.cover_image || undefined,
+				totalEpisodes: up.podcast.total_episodes || undefined,
+				ratings: [],
+			};
+		},
+		[enrichedPodcasts],
+	);
+
 	// Handle deep linking - open book from URL param
 	useEffect(() => {
 		const bookId = searchParams.get('book');
@@ -645,6 +845,17 @@ function DashboardPageInner() {
 			})
 		: userMovies;
 
+	const filteredUserPodcasts = searchQuery
+		? userPodcasts.filter((up) => {
+				const query = searchQuery.toLowerCase();
+				return (
+					up.podcast.title.toLowerCase().includes(query) ||
+					(up.podcast.creator?.toLowerCase().includes(query)) ||
+					(up.notes?.toLowerCase().includes(query))
+				);
+			})
+		: userPodcasts;
+
 	// Group books by genre (genre is now on the book, not user_books)
 	const booksByGenre = filteredUserBooks.reduce(
 		(acc, ub) => {
@@ -667,10 +878,22 @@ function DashboardPageInner() {
 		{} as Record<string, UserMovieWithDetails[]>,
 	);
 
-	// Combined genres (union of book and movie genres)
+	// Group podcasts by genre
+	const podcastsByGenre = filteredUserPodcasts.reduce(
+		(acc, up) => {
+			const genre = up.genre || (up.podcast.genres?.[0]) || 'Uncategorized';
+			if (!acc[genre]) acc[genre] = [];
+			acc[genre].push(up);
+			return acc;
+		},
+		{} as Record<string, UserPodcastWithDetails[]>,
+	);
+
+	// Combined genres (union of book, movie, and podcast genres)
 	const allGenres = new Set([
 		...Object.keys(booksByGenre),
 		...Object.keys(moviesByGenre),
+		...Object.keys(podcastsByGenre),
 	]);
 
 	const sortedGenres = Array.from(allGenres).sort((a, b) => {
@@ -680,7 +903,7 @@ function DashboardPageInner() {
 	});
 
 	// Total item count
-	const totalItems = userBooks.length + userMovies.length;
+	const totalItems = userBooks.length + userMovies.length + userPodcasts.length;
 
 	return (
 		<div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
@@ -698,6 +921,9 @@ function DashboardPageInner() {
 										{userBooks.length} {userBooks.length === 1 ? 'book' : 'books'}
 										{userMovies.length > 0 && (
 											<>, {userMovies.length} {userMovies.length === 1 ? 'movie' : 'movies'}</>
+										)}
+										{userPodcasts.length > 0 && (
+											<>, {userPodcasts.length} {userPodcasts.length === 1 ? 'podcast' : 'podcasts'}</>
 										)}
 										{profile?.username && (
 											<span className="ml-2">
@@ -782,6 +1008,25 @@ function DashboardPageInner() {
 								Add Movie
 							</button>
 							<button
+								onClick={() => setShowAddPodcastModal(true)}
+								className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+							>
+								<svg
+									className="w-5 h-5"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+									/>
+								</svg>
+								Add Podcast
+							</button>
+							<button
 								onClick={() => setShowCSVModal(true)}
 								className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-medium rounded-lg transition-colors flex items-center gap-2"
 							>
@@ -844,7 +1089,7 @@ function DashboardPageInner() {
 						{totalItems > 0 && (
 							<div className="flex items-center gap-3">
 								{/* Media Type Filter */}
-								{userMovies.length > 0 && (
+								{(userMovies.length > 0 || userPodcasts.length > 0) && (
 									<div className="flex items-center gap-2">
 										<label htmlFor="media-type-filter" className="text-sm text-zinc-500">
 											Type:
@@ -858,6 +1103,7 @@ function DashboardPageInner() {
 											<option value="all">All ({totalItems})</option>
 											<option value="books">Books ({userBooks.length})</option>
 											<option value="movies">Movies ({userMovies.length})</option>
+											<option value="podcasts">Podcasts ({userPodcasts.length})</option>
 										</select>
 									</div>
 								)}
@@ -877,7 +1123,8 @@ function DashboardPageInner() {
 										{sortedGenres.map((genre) => {
 											const bookCount = booksByGenre[genre]?.length || 0;
 											const movieCount = moviesByGenre[genre]?.length || 0;
-											const total = bookCount + movieCount;
+											const podcastCount = podcastsByGenre[genre]?.length || 0;
+											const total = bookCount + movieCount + podcastCount;
 											return (
 												<option key={genre} value={genre}>
 													{genre} ({total})
@@ -1002,7 +1249,7 @@ function DashboardPageInner() {
 							Your shelf is empty
 						</h2>
 						<p className="text-zinc-500 mb-6">
-							Add books or movies to get started
+							Add books, movies, or podcasts to get started
 						</p>
 						<div className="flex justify-center gap-3">
 							<button
@@ -1017,6 +1264,12 @@ function DashboardPageInner() {
 							>
 								Add a Movie
 							</button>
+							<button
+								onClick={() => setShowAddPodcastModal(true)}
+								className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg transition-colors"
+							>
+								Add a Podcast
+							</button>
 						</div>
 					</div>
 				) : (
@@ -1025,23 +1278,28 @@ function DashboardPageInner() {
 							// Filter genres based on media type
 							const hasBooks = booksByGenre[genre]?.length > 0;
 							const hasMovies = moviesByGenre[genre]?.length > 0;
+							const hasPodcasts = podcastsByGenre[genre]?.length > 0;
 							if (mediaTypeFilter === 'books') return hasBooks;
 							if (mediaTypeFilter === 'movies') return hasMovies;
-							return hasBooks || hasMovies;
+							if (mediaTypeFilter === 'podcasts') return hasPodcasts;
+							return hasBooks || hasMovies || hasPodcasts;
 						})
 						.map((genre) => {
 							const isCollapsed = collapsedGenres.has(genre) && selectedGenreFilter === 'all';
 							const genreBooks = booksByGenre[genre] || [];
 							const genreMovies = moviesByGenre[genre] || [];
+							const genrePodcasts = podcastsByGenre[genre] || [];
 
 							// Filter items based on media type
-							const showBooks = mediaTypeFilter !== 'movies';
-							const showMovies = mediaTypeFilter !== 'books';
+							const showBooks = mediaTypeFilter === 'all' || mediaTypeFilter === 'books';
+							const showMovies = mediaTypeFilter === 'all' || mediaTypeFilter === 'movies';
+							const showPodcasts = mediaTypeFilter === 'all' || mediaTypeFilter === 'podcasts';
 
 							// Count for badge
 							const itemCount =
 								(showBooks ? genreBooks.length : 0) +
-								(showMovies ? genreMovies.length : 0);
+								(showMovies ? genreMovies.length : 0) +
+								(showPodcasts ? genrePodcasts.length : 0);
 
 							return (
 								<section key={genre} className="mb-8">
@@ -1078,6 +1336,8 @@ function DashboardPageInner() {
 													onClick={() => {
 														setSelectedMovie(null);
 														setSelectedUserMovieId(null);
+														setSelectedPodcast(null);
+														setSelectedUserPodcastId(null);
 														selectBook(getBookWithDetails(ub), ub.id);
 													}}
 												/>
@@ -1089,8 +1349,24 @@ function DashboardPageInner() {
 													movie={getMovieWithDetails(um)}
 													onClick={() => {
 														selectBook(null, null);
+														setSelectedPodcast(null);
+														setSelectedUserPodcastId(null);
 														setSelectedMovie(getMovieWithDetails(um));
 														setSelectedUserMovieId(um.id);
+													}}
+												/>
+											))}
+											{/* Render podcasts */}
+											{showPodcasts && genrePodcasts.map((up) => (
+												<PodcastCard
+													key={`podcast-${up.id}`}
+													podcast={getPodcastWithDetails(up)}
+													onClick={() => {
+														selectBook(null, null);
+														setSelectedMovie(null);
+														setSelectedUserMovieId(null);
+														setSelectedPodcast(getPodcastWithDetails(up));
+														setSelectedUserPodcastId(up.id);
 													}}
 												/>
 											))}
@@ -1114,6 +1390,13 @@ function DashboardPageInner() {
 				<AddMovieModal
 					onClose={() => setShowAddMovieModal(false)}
 					onMovieAdded={handleMovieAdded}
+				/>
+			)}
+
+			{showAddPodcastModal && (
+				<AddPodcastModal
+					onClose={() => setShowAddPodcastModal(false)}
+					onPodcastAdded={handlePodcastAdded}
 				/>
 			)}
 
@@ -1163,6 +1446,27 @@ function DashboardPageInner() {
 						: undefined
 				}
 				onToggleWatched={handleToggleWatched}
+			/>
+
+			{/* Podcast Details Sidebar */}
+			<PodcastDetailsSidebar
+				podcast={selectedPodcast}
+				onClose={() => {
+					setSelectedPodcast(null);
+					setSelectedUserPodcastId(null);
+				}}
+				onRefresh={
+					selectedPodcast ? () => handleRefreshPodcast(selectedPodcast.id) : undefined
+				}
+				onRemove={
+					selectedUserPodcastId
+						? async () => {
+								await handleRemovePodcast(selectedUserPodcastId);
+								setSelectedPodcast(null);
+								setSelectedUserPodcastId(null);
+							}
+						: undefined
+				}
 			/>
 		</div>
 	);

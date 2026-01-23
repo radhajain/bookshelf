@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/components/auth/AuthProvider';
-import { DbBook, DbMovie } from '@/app/lib/types/database';
+import { DbBook, DbMovie, DbPodcast } from '@/app/lib/types/database';
 import Image from 'next/image';
 import Link from 'next/link';
+import LoginModal from '@/app/components/auth/LoginModal';
 
 interface BookWithShelfStatus extends DbBook {
   inMyShelf: boolean;
@@ -14,20 +15,28 @@ interface MovieWithShelfStatus extends DbMovie {
   inMyShelf: boolean;
 }
 
-type MediaTypeFilter = 'all' | 'books' | 'movies';
+interface PodcastWithShelfStatus extends DbPodcast {
+  inMyShelf: boolean;
+}
+
+type MediaTypeFilter = 'all' | 'books' | 'movies' | 'podcasts';
 
 export default function BrowsePage() {
   const { user, loading: authLoading } = useAuth();
   const [books, setBooks] = useState<BookWithShelfStatus[]>([]);
   const [movies, setMovies] = useState<MovieWithShelfStatus[]>([]);
+  const [podcasts, setPodcasts] = useState<PodcastWithShelfStatus[]>([]);
   const [bookGenres, setBookGenres] = useState<string[]>([]);
   const [movieGenres, setMovieGenres] = useState<string[]>([]);
+  const [podcastGenres, setPodcastGenres] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('all');
   const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>('all');
   const [addingBookId, setAddingBookId] = useState<string | null>(null);
   const [addingMovieId, setAddingMovieId] = useState<string | null>(null);
+  const [addingPodcastId, setAddingPodcastId] = useState<string | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -35,10 +44,11 @@ export default function BrowsePage() {
     if (searchQuery) params.set('q', searchQuery);
     if (selectedGenre !== 'all') params.set('genre', selectedGenre);
 
-    // Fetch books and movies in parallel
-    const [booksResponse, moviesResponse] = await Promise.all([
+    // Fetch books, movies, and podcasts in parallel
+    const [booksResponse, moviesResponse, podcastsResponse] = await Promise.all([
       fetch(`/api/books?${params}`),
       fetch(`/api/movies?${params}`),
+      fetch(`/api/podcasts?${params}`),
     ]);
 
     if (booksResponse.ok) {
@@ -51,6 +61,11 @@ export default function BrowsePage() {
       setMovies(data.movies || []);
       setMovieGenres(data.genres || []);
     }
+    if (podcastsResponse.ok) {
+      const data = await podcastsResponse.json();
+      setPodcasts(data.podcasts || []);
+      setPodcastGenres(data.genres || []);
+    }
     setLoading(false);
   }, [searchQuery, selectedGenre]);
 
@@ -58,8 +73,8 @@ export default function BrowsePage() {
     fetchData();
   }, [fetchData]);
 
-  // Combined genres from both books and movies
-  const allGenres = Array.from(new Set([...bookGenres, ...movieGenres])).sort();
+  // Combined genres from books, movies, and podcasts
+  const allGenres = Array.from(new Set([...bookGenres, ...movieGenres, ...podcastGenres])).sort();
 
   const handleAddBookToShelf = async (book: BookWithShelfStatus) => {
     if (!user) return;
@@ -113,10 +128,37 @@ export default function BrowsePage() {
     }
   };
 
+  const handleAddPodcastToShelf = async (podcast: PodcastWithShelfStatus) => {
+    if (!user) return;
+
+    setAddingPodcastId(podcast.id);
+    try {
+      const response = await fetch('/api/user-podcasts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          podcastId: podcast.id,
+        }),
+      });
+
+      if (response.ok) {
+        // Update local state to reflect the podcast is now in shelf
+        setPodcasts(podcasts.map(p =>
+          p.id === podcast.id ? { ...p, inMyShelf: true } : p
+        ));
+      }
+    } catch (error) {
+      console.error('Error adding podcast to shelf:', error);
+    } finally {
+      setAddingPodcastId(null);
+    }
+  };
+
   // Filter items based on media type
-  const filteredBooks = mediaTypeFilter !== 'movies' ? books : [];
-  const filteredMovies = mediaTypeFilter !== 'books' ? movies : [];
-  const totalItems = filteredBooks.length + filteredMovies.length;
+  const filteredBooks = mediaTypeFilter === 'all' || mediaTypeFilter === 'books' ? books : [];
+  const filteredMovies = mediaTypeFilter === 'all' || mediaTypeFilter === 'movies' ? movies : [];
+  const filteredPodcasts = mediaTypeFilter === 'all' || mediaTypeFilter === 'podcasts' ? podcasts : [];
+  const totalItems = filteredBooks.length + filteredMovies.length + filteredPodcasts.length;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
@@ -130,6 +172,9 @@ export default function BrowsePage() {
                 {books.length} {books.length === 1 ? 'book' : 'books'}
                 {movies.length > 0 && (
                   <>, {movies.length} {movies.length === 1 ? 'movie' : 'movies'}</>
+                )}
+                {podcasts.length > 0 && (
+                  <>, {podcasts.length} {podcasts.length === 1 ? 'podcast' : 'podcasts'}</>
                 )} in the library
               </p>
             </div>
@@ -150,12 +195,12 @@ export default function BrowsePage() {
                   </Link>
                 </>
               ) : (
-                <Link
-                  href="/login"
+                <button
+                  onClick={() => setShowLoginModal(true)}
                   className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg transition-colors"
                 >
-                  Login to Add Items
-                </Link>
+                  Sign In
+                </button>
               )}
             </div>
           </div>
@@ -193,15 +238,16 @@ export default function BrowsePage() {
             </div>
 
             {/* Media Type Filter */}
-            {movies.length > 0 && (
+            {(movies.length > 0 || podcasts.length > 0) && (
               <select
                 value={mediaTypeFilter}
                 onChange={(e) => setMediaTypeFilter(e.target.value as MediaTypeFilter)}
                 className="px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-colors bg-white"
               >
-                <option value="all">All Types ({books.length + movies.length})</option>
+                <option value="all">All Types ({books.length + movies.length + podcasts.length})</option>
                 <option value="books">Books ({books.length})</option>
                 <option value="movies">Movies ({movies.length})</option>
+                <option value="podcasts">Podcasts ({podcasts.length})</option>
               </select>
             )}
 
@@ -269,7 +315,7 @@ export default function BrowsePage() {
             {filteredBooks.map((book) => (
               <div
                 key={`book-${book.id}`}
-                className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden hover:shadow-md transition-shadow"
+                className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden hover:shadow-md transition-shadow flex flex-col"
               >
                 {/* Book Cover */}
                 <div className="aspect-[2/3] bg-gradient-to-br from-zinc-100 to-zinc-200 relative">
@@ -304,14 +350,14 @@ export default function BrowsePage() {
                   )}
 
                   {/* Type & Genre Badge */}
-                  <div className="absolute top-2 left-2 flex flex-col gap-1">
-                    {movies.length > 0 && (
-                      <span className="px-2 py-0.5 bg-amber-500 text-white text-xs rounded-full">
+                  <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
+                    {(movies.length > 0 || podcasts.length > 0) && (
+                      <span className="px-2 py-0.5 bg-amber-500 text-white text-xs rounded-full w-fit">
                         Book
                       </span>
                     )}
                     {book.genre && book.genre !== 'Uncategorized' && (
-                      <span className="px-2 py-0.5 bg-black/60 text-white text-xs rounded-full">
+                      <span className="px-2 py-0.5 bg-black/60 text-white text-xs rounded-full w-fit">
                         {book.genre}
                       </span>
                     )}
@@ -320,7 +366,7 @@ export default function BrowsePage() {
                   {/* In Shelf Badge */}
                   {book.inMyShelf && (
                     <div className="absolute top-2 right-2">
-                      <span className="px-2 py-0.5 bg-green-500 text-white text-xs rounded-full flex items-center gap-1">
+                      <span className="px-2 py-0.5 bg-green-500 text-white text-xs rounded-full flex items-center gap-1 w-fit">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                           <path
                             fillRule="evenodd"
@@ -335,7 +381,7 @@ export default function BrowsePage() {
                 </div>
 
                 {/* Book Info */}
-                <div className="p-4">
+                <div className="p-4 flex flex-col flex-1">
                   <h3 className="font-semibold text-zinc-900 line-clamp-2 mb-1">
                     {book.title}
                   </h3>
@@ -343,12 +389,15 @@ export default function BrowsePage() {
                     <p className="text-sm text-zinc-500 mb-3">by {book.author}</p>
                   )}
 
+                  {/* Spacer to push button to bottom */}
+                  <div className="flex-1" />
+
                   {/* Add to Shelf Button */}
                   {user && !book.inMyShelf && (
                     <button
                       onClick={() => handleAddBookToShelf(book)}
                       disabled={addingBookId === book.id}
-                      className="w-full px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-auto"
                     >
                       {addingBookId === book.id ? (
                         <>
@@ -369,19 +418,22 @@ export default function BrowsePage() {
                   {book.inMyShelf && (
                     <Link
                       href="/dashboard"
-                      className="block w-full px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg transition-colors text-center"
+                      className="block w-full px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg transition-colors text-center mt-auto"
                     >
                       View in My Shelf
                     </Link>
                   )}
 
                   {!user && (
-                    <Link
-                      href="/login"
-                      className="block w-full px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg transition-colors text-center"
+                    <button
+                      onClick={() => setShowLoginModal(true)}
+                      className="w-full px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 mt-auto"
                     >
-                      Login to Add
-                    </Link>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add to My Shelf
+                    </button>
                   )}
                 </div>
               </div>
@@ -391,7 +443,7 @@ export default function BrowsePage() {
             {filteredMovies.map((movie) => (
               <div
                 key={`movie-${movie.id}`}
-                className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden hover:shadow-md transition-shadow"
+                className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden hover:shadow-md transition-shadow flex flex-col"
               >
                 {/* Movie Poster */}
                 <div className="aspect-[2/3] bg-gradient-to-br from-zinc-100 to-zinc-200 relative">
@@ -426,12 +478,12 @@ export default function BrowsePage() {
                   )}
 
                   {/* Type & Genre Badge */}
-                  <div className="absolute top-2 left-2 flex flex-col gap-1">
-                    <span className="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                  <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
+                    <span className="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full w-fit">
                       Movie
                     </span>
                     {movie.genres && movie.genres[0] && movie.genres[0] !== 'Uncategorized' && (
-                      <span className="px-2 py-0.5 bg-black/60 text-white text-xs rounded-full">
+                      <span className="px-2 py-0.5 bg-black/60 text-white text-xs rounded-full w-fit">
                         {movie.genres[0]}
                       </span>
                     )}
@@ -440,7 +492,7 @@ export default function BrowsePage() {
                   {/* In Shelf Badge */}
                   {movie.inMyShelf && (
                     <div className="absolute top-2 right-2">
-                      <span className="px-2 py-0.5 bg-green-500 text-white text-xs rounded-full flex items-center gap-1">
+                      <span className="px-2 py-0.5 bg-green-500 text-white text-xs rounded-full flex items-center gap-1 w-fit">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                           <path
                             fillRule="evenodd"
@@ -456,7 +508,7 @@ export default function BrowsePage() {
                   {/* Rotten Tomatoes Score */}
                   {movie.rotten_tomatoes_score && (
                     <div className="absolute bottom-2 right-2">
-                      <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex items-center gap-1">
+                      <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex items-center gap-1 w-fit">
                         {movie.rotten_tomatoes_score}%
                       </span>
                     </div>
@@ -464,7 +516,7 @@ export default function BrowsePage() {
                 </div>
 
                 {/* Movie Info */}
-                <div className="p-4">
+                <div className="p-4 flex flex-col flex-1">
                   <h3 className="font-semibold text-zinc-900 line-clamp-2 mb-1">
                     {movie.title}
                   </h3>
@@ -474,12 +526,15 @@ export default function BrowsePage() {
                     {movie.year && movie.year}
                   </p>
 
+                  {/* Spacer to push button to bottom */}
+                  <div className="flex-1" />
+
                   {/* Add to Shelf Button */}
                   {user && !movie.inMyShelf && (
                     <button
                       onClick={() => handleAddMovieToShelf(movie)}
                       disabled={addingMovieId === movie.id}
-                      className="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-auto"
                     >
                       {addingMovieId === movie.id ? (
                         <>
@@ -500,19 +555,157 @@ export default function BrowsePage() {
                   {movie.inMyShelf && (
                     <Link
                       href="/dashboard"
-                      className="block w-full px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg transition-colors text-center"
+                      className="block w-full px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg transition-colors text-center mt-auto"
                     >
                       View in My Shelf
                     </Link>
                   )}
 
                   {!user && (
-                    <Link
-                      href="/login"
-                      className="block w-full px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg transition-colors text-center"
+                    <button
+                      onClick={() => setShowLoginModal(true)}
+                      className="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 mt-auto"
                     >
-                      Login to Add
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add to My Shelf
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Render Podcasts */}
+            {filteredPodcasts.map((podcast) => (
+              <div
+                key={`podcast-${podcast.id}`}
+                className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden hover:shadow-md transition-shadow flex flex-col"
+              >
+                {/* Podcast Cover */}
+                <div className="aspect-square bg-gradient-to-br from-purple-100 to-purple-200 relative">
+                  {podcast.cover_image ? (
+                    <Image
+                      src={podcast.cover_image}
+                      alt={podcast.title}
+                      fill
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center p-4">
+                      <div className="text-center">
+                        <svg
+                          className="w-12 h-12 text-purple-300 mx-auto mb-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.5}
+                            d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                          />
+                        </svg>
+                        <p className="text-xs text-purple-400 line-clamp-2">
+                          {podcast.title}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Type & Genre Badge */}
+                  <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
+                    <span className="px-2 py-0.5 bg-purple-500 text-white text-xs rounded-full w-fit">
+                      Podcast
+                    </span>
+                    {podcast.genres && podcast.genres[0] && podcast.genres[0] !== 'Uncategorized' && (
+                      <span className="px-2 py-0.5 bg-black/60 text-white text-xs rounded-full w-fit">
+                        {podcast.genres[0]}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* In Shelf Badge */}
+                  {podcast.inMyShelf && (
+                    <div className="absolute top-2 right-2">
+                      <span className="px-2 py-0.5 bg-green-500 text-white text-xs rounded-full flex items-center gap-1 w-fit">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        In My Shelf
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Episode Count */}
+                  {podcast.total_episodes && (
+                    <div className="absolute bottom-2 right-2">
+                      <span className="px-2 py-0.5 bg-black/70 text-white text-xs rounded-full w-fit">
+                        {podcast.total_episodes} eps
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Podcast Info */}
+                <div className="p-4 flex flex-col flex-1">
+                  <h3 className="font-semibold text-zinc-900 line-clamp-2 mb-1">
+                    {podcast.title}
+                  </h3>
+                  {podcast.creator && (
+                    <p className="text-sm text-zinc-500 mb-3">by {podcast.creator}</p>
+                  )}
+
+                  {/* Spacer to push button to bottom */}
+                  <div className="flex-1" />
+
+                  {/* Add to Shelf Button */}
+                  {user && !podcast.inMyShelf && (
+                    <button
+                      onClick={() => handleAddPodcastToShelf(podcast)}
+                      disabled={addingPodcastId === podcast.id}
+                      className="w-full px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-auto"
+                    >
+                      {addingPodcastId === podcast.id ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Add to My Shelf
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {podcast.inMyShelf && (
+                    <Link
+                      href="/dashboard"
+                      className="block w-full px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg transition-colors text-center mt-auto"
+                    >
+                      View in My Shelf
                     </Link>
+                  )}
+
+                  {!user && (
+                    <button
+                      onClick={() => setShowLoginModal(true)}
+                      className="w-full px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 mt-auto"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add to My Shelf
+                    </button>
                   )}
                 </div>
               </div>
@@ -520,6 +713,19 @@ export default function BrowsePage() {
           </div>
         )}
       </main>
+
+      {/* Login Modal */}
+      {showLoginModal && (
+        <LoginModal
+          onClose={() => setShowLoginModal(false)}
+          onSuccess={() => {
+            setShowLoginModal(false);
+            // Refresh data after login
+            fetchData();
+          }}
+          message="Sign in to add items to your shelf"
+        />
+      )}
     </div>
   );
 }
