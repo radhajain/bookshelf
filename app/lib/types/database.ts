@@ -72,3 +72,91 @@ export interface UpdateProfileInput {
   username?: string | null;
   display_name?: string | null;
 }
+
+// =============================================
+// Movie Types
+// =============================================
+
+export interface DbMovie {
+  id: string;
+  title: string;
+  director: string | null;
+  year: number | null;
+  runtime_minutes: number | null;
+  poster_image: string | null;
+  backdrop_image: string | null;
+  description: string | null;
+  tagline: string | null;
+  // External IDs
+  tmdb_id: number | null;
+  imdb_id: string | null;
+  // Cached rating data from APIs
+  tmdb_rating: number | null;
+  tmdb_ratings_count: number | null;
+  rotten_tomatoes_score: number | null;
+  rotten_tomatoes_audience_score: number | null;
+  metacritic_score: number | null;
+  imdb_rating: number | null;
+  imdb_ratings_count: number | null;
+  // Additional metadata
+  cast_members: string[] | null;
+  genres: string[] | null;
+  release_date: string | null;
+  budget: number | null;
+  revenue: number | null;
+  production_companies: string[] | null;
+  // Links
+  imdb_url: string | null;
+  letterboxd_url: string | null;
+  // Caching and tracking
+  details_fetched_at: string | null;
+  created_at: string;
+}
+
+export interface DbUserMovie {
+  id: string;
+  user_id: string;
+  movie_id: string;
+  genre: string | null;
+  notes: string | null;
+  priority: string | null;
+  watched: boolean;
+  watched_at: string | null;
+  rating: number | null;
+  created_at: string;
+}
+
+// Joined type for fetching user's movies with movie details
+export interface UserMovieWithDetails extends DbUserMovie {
+  movie: DbMovie;
+}
+
+// Input types for creating/updating movies
+export interface CreateMovieInput {
+  title: string;
+  director?: string;
+  year?: number;
+}
+
+export interface CreateUserMovieInput {
+  movie_id: string;
+  genre?: string;
+  notes?: string;
+  priority?: string;
+  watched?: boolean;
+}
+
+export interface UpdateUserMovieInput {
+  genre?: string;
+  notes?: string;
+  priority?: string;
+  watched?: boolean;
+  watched_at?: string;
+  rating?: number;
+}
+
+export interface UpdateMovieInput {
+  director?: string;
+  year?: number;
+  genres?: string[];
+}

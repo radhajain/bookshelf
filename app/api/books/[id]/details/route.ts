@@ -204,8 +204,9 @@ export async function POST(
 
     // Update book with fetched details
     // Also set genre if it's still Uncategorized and we deduced one
+    // Preserve existing cover_image if API doesn't return one (may have been saved from author selection)
     const updateData: Record<string, unknown> = {
-      cover_image: details.coverImage || null,
+      cover_image: details.coverImage || book.cover_image || null,
       description: details.description || null,
       isbn: details.isbn || null,
       published_date: details.publishedDate || null,

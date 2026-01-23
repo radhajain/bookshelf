@@ -86,12 +86,13 @@ export default function AuthorSelectionModal({
     setError('');
 
     try {
-      // Update the book with the selected author
+      // Update the book with the selected author and cover image if available
       const response = await fetch(`/api/books/${bookId}/author`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           author: selectedBook.author,
+          coverImage: selectedBook.coverImage,
         }),
       });
 

@@ -94,6 +94,13 @@ export default function BookCard({ book, onClick }: BookCardProps) {
 						View Details
 					</span>
 				</div>
+
+				{/* Type Badge */}
+				<div className="absolute top-2 left-2">
+					<span className="px-2 py-0.5 bg-amber-500 text-white text-xs font-medium rounded-full">
+						Book
+					</span>
+				</div>
 			</div>
 
 			{/* Book Info */}
