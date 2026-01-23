@@ -1,6 +1,6 @@
 # Shelf
 
-A personal content curation and sharing platform. Build your digital shelf of books, movies, podcasts, and more.
+A personal content curation and sharing platform. Build your digital shelf of books, movies, and podcasts.
 
 ## The Problem
 
@@ -14,29 +14,67 @@ We consume more content than ever - books we've read, movies we've watched, podc
 
 Shelf is your personal content library that you actually own and can share:
 
-1. **Curate** - Add books, movies, podcasts to your shelf. Import from CSV or add manually.
-2. **Enrich** - Automatic metadata enrichment from Google Books, Open Library, and more. See ratings, descriptions, and cover art.
-3. **Organize** - Categorize by genre, add personal notes, mark priorities.
+1. **Curate** - Add books, movies, and podcasts to your shelf. Import from CSV or add manually.
+2. **Enrich** - Automatic metadata enrichment from multiple sources. See ratings, descriptions, and cover art.
+3. **Organize** - Categorize by genre, add personal notes, mark priorities, and track read/watched status.
 4. **Share** - Set a username and get a public profile URL. Share your curated taste with anyone.
+5. **Discover** - Browse the shared library to find new content from other users.
 
 ## Features
 
+### Content Support
+- **Books** - Metadata from Google Books, Open Library, Goodreads, and Amazon
+- **Movies** - Metadata from TMDB, IMDb, Rotten Tomatoes, Metacritic, and Letterboxd
+- **Podcasts** - Metadata from Podcast Index and Apple Podcasts
+
+### Core Features
 - Email/password authentication via Supabase
 - CSV bulk import for quick shelf building
-- Automatic book metadata from Google Books and Open Library
-- Smart author detection with manual override
+- Smart metadata enrichment with rate limiting
 - Genre-based organization with collapsible sections
+- Personal notes and priority tagging
+- Read/watched status tracking
 - Shareable public profiles (`/u/username`)
 - Deep linking to specific items
+- AI-powered chat assistant for recommendations
 - Responsive design for mobile and desktop
+
+### Browse Library
+- Browse all content added by users
+- Filter by media type (books, movies, podcasts)
+- Filter by genre
+- Search by title or creator
+- One-click add to your shelf
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 (App Router)
+- **Framework**: Next.js 16 with App Router
+- **Language**: TypeScript
 - **Database**: Supabase PostgreSQL
 - **Auth**: Supabase Email/Password
-- **Styling**: Tailwind CSS
-- **APIs**: Google Books, Open Library
+- **Styling**: Tailwind CSS 4
+- **APIs**: Google Books, Open Library, TMDB, Podcast Index
+- **AI**: Claude for chat recommendations
+
+## Project Structure
+
+```
+app/
+├── components/
+│   ├── shared/           # Reusable UI components (Modal, Sidebar, ContentCard, etc.)
+│   ├── books/            # Book-specific components
+│   ├── movies/           # Movie-specific components
+│   ├── podcasts/         # Podcast-specific components
+│   └── auth/             # Authentication components
+├── lib/
+│   ├── types/            # TypeScript types and shared content configs
+│   ├── supabase/         # Supabase client configuration
+│   └── *.ts              # API helpers (bookApi, movieApi, podcastApi)
+├── api/                  # API routes
+├── dashboard/            # My Shelf page
+├── browse/               # Browse Library page
+└── u/[username]/         # Public profile pages
+```
 
 ## Getting Started
 
@@ -52,6 +90,8 @@ Create a `.env.local` file:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+TMDB_API_KEY=your_tmdb_api_key
+ANTHROPIC_API_KEY=your_anthropic_api_key  # Optional, for chat feature
 ```
 
 ### Installation
@@ -65,13 +105,12 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 
 ## Roadmap
 
-- [ ] Movies and TV shows support
-- [ ] Podcast episode tracking
 - [ ] Music albums and playlists
 - [ ] Follow other users
 - [ ] Activity feed from people you follow
 - [ ] Lists and collections
 - [ ] Import from Goodreads, Letterboxd, etc.
+- [ ] TV shows with episode tracking
 
 ## License
 

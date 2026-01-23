@@ -697,7 +697,6 @@ function BrowsePageInner() {
 						// Refresh data after login
 						fetchData();
 					}}
-					message="Sign in to add items to your shelf"
 				/>
 			)}
 
