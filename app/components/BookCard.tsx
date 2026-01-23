@@ -56,8 +56,8 @@ export default function BookCard({ book, onClick }: BookCardProps) {
 			onClick={onClick}
 			className="group relative flex flex-col bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-zinc-100 cursor-pointer hover:-translate-y-1"
 		>
-			{/* Book Cover */}
-			<div className="relative h-96 bg-gradient-to-br from-amber-100 to-amber-50 flex items-center justify-center overflow-hidden">
+			{/* Book Cover - responsive height */}
+			<div className="relative h-48 sm:h-64 md:h-80 lg:h-96 bg-gradient-to-br from-amber-100 to-amber-50 flex items-center justify-center overflow-hidden">
 				{book.coverImage && !imageError ? (
 					<Image
 						src={book.coverImage}
@@ -65,69 +65,57 @@ export default function BookCard({ book, onClick }: BookCardProps) {
 						fill
 						className="object-cover group-hover:scale-105 transition-transform duration-300"
 						onError={() => setImageError(true)}
-						sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+						sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
 					/>
 				) : (
-					<div className="flex flex-col items-center justify-center p-4 text-center">
-						<svg
-							className="w-12 h-12 text-amber-300 mb-2"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={1.5}
-								d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-							/>
-						</svg>
-						<span className="text-xs text-amber-600 font-medium line-clamp-2">
+					<div className="absolute inset-0 bg-white flex items-center justify-center p-4 sm:p-6">
+						<h3 className="font-serif text-sm sm:text-base lg:text-lg text-zinc-800 text-center leading-snug line-clamp-4">
 							{book.title}
-						</span>
+						</h3>
 					</div>
 				)}
 
-				{/* Click indicator */}
-				<div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+				{/* Click indicator - hidden on mobile, shown on hover for desktop */}
+				<div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors hidden sm:flex items-center justify-center">
 					<span className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 px-3 py-1 rounded-full text-xs font-medium text-zinc-700 shadow">
 						View Details
 					</span>
 				</div>
 
-				{/* Type Badge */}
-				<div className="absolute top-2 left-2">
-					<span className="px-2 py-0.5 bg-amber-500 text-white text-xs font-medium rounded-full">
+				{/* Type Badge - smaller on mobile */}
+				<div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2">
+					<span className="px-1.5 sm:px-2 py-0.5 bg-amber-500 text-white text-[10px] sm:text-xs font-medium rounded-full">
 						Book
 					</span>
 				</div>
 			</div>
 
-			{/* Book Info */}
-			<div className="flex flex-col flex-1 p-4">
+			{/* Book Info - responsive padding */}
+			<div className="flex flex-col flex-1 p-2.5 sm:p-3 lg:p-4">
 				{/* Title */}
-				<h3 className="font-semibold text-zinc-900 text-sm leading-tight mb-1 line-clamp-2">
+				<h3 className="font-semibold text-zinc-900 text-xs sm:text-sm leading-tight mb-0.5 sm:mb-1 line-clamp-2">
 					{book.title}
 				</h3>
 
 				{/* Author */}
 				{book.author ? (
-					<p className="text-xs text-zinc-500 mb-2">by {book.author}</p>
+					<p className="text-[10px] sm:text-xs text-zinc-500 mb-1.5 sm:mb-2 truncate">by {book.author}</p>
 				) : book.needsAuthorClarification ? (
-					<p className="text-xs text-amber-600 mb-2 flex items-center gap-1">
-						<svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+					<p className="text-[10px] sm:text-xs text-amber-600 mb-1.5 sm:mb-2 flex items-center gap-1">
+						<svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" fill="currentColor" viewBox="0 0 20 20">
 							<path
 								fillRule="evenodd"
 								d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
 								clipRule="evenodd"
 							/>
 						</svg>
-						Author needed
+						<span className="hidden sm:inline">Author needed</span>
+						<span className="sm:hidden">Needed</span>
 					</p>
 				) : null}
 
-				{/* Ratings */}
-				<div className="mb-2 space-y-0.5">
+				{/* Ratings - hidden on very small screens */}
+				<div className="mb-1.5 sm:mb-2 space-y-0.5 hidden sm:block">
 					{ratingsWithData.length > 0 ? (
 						ratingsWithData
 							.slice(0, 2)
@@ -141,8 +129,8 @@ export default function BookCard({ book, onClick }: BookCardProps) {
 					)}
 				</div>
 
-				{/* Description */}
-				<div className="flex-1">
+				{/* Description - hidden on mobile */}
+				<div className="flex-1 hidden lg:block">
 					{truncatedDescription ? (
 						<p className="text-xs text-zinc-600 leading-relaxed line-clamp-3">
 							{truncatedDescription}
@@ -152,15 +140,15 @@ export default function BookCard({ book, onClick }: BookCardProps) {
 					)}
 				</div>
 
-				{/* Footer */}
-				<div className="mt-3 pt-3 border-t border-zinc-100 flex flex-wrap gap-2">
+				{/* Footer - simplified on mobile */}
+				<div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-zinc-100 flex flex-wrap gap-1.5 sm:gap-2">
 					{book.pages && (
-						<span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-100 text-zinc-600">
-							{book.pages} pages
+						<span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-medium bg-zinc-100 text-zinc-600">
+							{book.pages}p
 						</span>
 					)}
 					{book.notes && (
-						<span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 truncate max-w-[120px]">
+						<span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-medium bg-amber-50 text-amber-700 truncate max-w-[80px] sm:max-w-[120px]">
 							{book.notes}
 						</span>
 					)}

@@ -88,8 +88,8 @@ export default function MovieCard({ movie, onClick }: MovieCardProps) {
       onClick={onClick}
       className="group relative flex flex-col bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-zinc-100 cursor-pointer hover:-translate-y-1"
     >
-      {/* Movie Poster */}
-      <div className="relative h-96 bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center overflow-hidden">
+      {/* Movie Poster - responsive height */}
+      <div className="relative h-48 sm:h-64 md:h-80 lg:h-96 bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center overflow-hidden">
         {movie.posterImage && !imageError ? (
           <Image
             src={movie.posterImage}
@@ -97,66 +97,52 @@ export default function MovieCard({ movie, onClick }: MovieCardProps) {
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-300"
             onError={() => setImageError(true)}
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
         ) : (
-          <div className="flex flex-col items-center justify-center p-4 text-center">
-            {/* Film icon */}
-            <svg
-              className="w-12 h-12 text-blue-300 mb-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"
-              />
-            </svg>
-            <span className="text-xs text-blue-600 font-medium line-clamp-2">
+          <div className="absolute inset-0 bg-white flex items-center justify-center p-4 sm:p-6">
+            <h3 className="font-serif text-sm sm:text-base lg:text-lg text-zinc-800 text-center leading-snug line-clamp-4">
               {movie.title}
-            </span>
+            </h3>
           </div>
         )}
 
-        {/* Click indicator */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+        {/* Click indicator - hidden on mobile */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors hidden sm:flex items-center justify-center">
           <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 px-3 py-1 rounded-full text-xs font-medium text-zinc-700 shadow">
             View Details
           </span>
         </div>
 
-        {/* Type Badge */}
-        <div className="absolute top-2 left-2">
-          <span className="px-2 py-0.5 bg-blue-500 text-white text-xs font-medium rounded-full">
+        {/* Type Badge - smaller on mobile */}
+        <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2">
+          <span className="px-1.5 sm:px-2 py-0.5 bg-blue-500 text-white text-[10px] sm:text-xs font-medium rounded-full">
             Movie
           </span>
         </div>
 
-        {/* Year badge */}
+        {/* Year badge - smaller on mobile */}
         {movie.year && (
-          <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-0.5 rounded">
+          <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-black/70 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded">
             {movie.year}
           </div>
         )}
       </div>
 
-      {/* Movie Info */}
-      <div className="flex flex-col flex-1 p-4">
+      {/* Movie Info - responsive padding */}
+      <div className="flex flex-col flex-1 p-2.5 sm:p-3 lg:p-4">
         {/* Title */}
-        <h3 className="font-semibold text-zinc-900 text-sm leading-tight mb-1 line-clamp-2">
+        <h3 className="font-semibold text-zinc-900 text-xs sm:text-sm leading-tight mb-0.5 sm:mb-1 line-clamp-2">
           {movie.title}
         </h3>
 
         {/* Director */}
         {movie.director && (
-          <p className="text-xs text-zinc-500 mb-2">dir. {movie.director}</p>
+          <p className="text-[10px] sm:text-xs text-zinc-500 mb-1.5 sm:mb-2 truncate">dir. {movie.director}</p>
         )}
 
-        {/* Ratings */}
-        <div className="mb-2 space-y-0.5">
+        {/* Ratings - hidden on very small screens */}
+        <div className="mb-1.5 sm:mb-2 space-y-0.5 hidden sm:block">
           {ratingsWithData.length > 0 ? (
             ratingsWithData
               .slice(0, 2)
@@ -170,8 +156,8 @@ export default function MovieCard({ movie, onClick }: MovieCardProps) {
           )}
         </div>
 
-        {/* Description */}
-        <div className="flex-1">
+        {/* Description - hidden on mobile */}
+        <div className="flex-1 hidden lg:block">
           {truncatedDescription ? (
             <p className="text-xs text-zinc-600 leading-relaxed line-clamp-3">
               {truncatedDescription}
@@ -181,20 +167,21 @@ export default function MovieCard({ movie, onClick }: MovieCardProps) {
           )}
         </div>
 
-        {/* Footer */}
-        <div className="mt-3 pt-3 border-t border-zinc-100 flex flex-wrap gap-2">
+        {/* Footer - simplified on mobile */}
+        <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-zinc-100 flex flex-wrap gap-1.5 sm:gap-2">
           {movie.runtime && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-100 text-zinc-600">
+            <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-medium bg-zinc-100 text-zinc-600">
               {formatRuntime(movie.runtime)}
             </span>
           )}
           {movie.watched && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700">
-              Watched
+            <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-medium bg-green-50 text-green-700">
+              <span className="hidden sm:inline">Watched</span>
+              <span className="sm:hidden">✓</span>
             </span>
           )}
           {movie.notes && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 truncate max-w-[120px]">
+            <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-medium bg-blue-50 text-blue-700 truncate max-w-[80px] sm:max-w-[120px]">
               {movie.notes}
             </span>
           )}

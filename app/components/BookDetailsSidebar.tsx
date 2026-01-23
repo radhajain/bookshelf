@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { BookWithDetails, RatingSource } from '../lib/books';
 import AuthorSelectionModal from './books/AuthorSelectionModal';
+import CoverSelectionModal from './books/CoverSelectionModal';
 
 interface BookDetailsSidebarProps {
   book: BookWithDetails | null;
@@ -86,6 +87,7 @@ export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove,
   const [removing, setRemoving] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [showAuthorSelection, setShowAuthorSelection] = useState(false);
+  const [showCoverSelection, setShowCoverSelection] = useState(false);
   const [togglingRead, setTogglingRead] = useState(false);
 
   if (!book) return null;
@@ -181,8 +183,12 @@ export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove,
         <div className="p-6">
           {/* Book Header */}
           <div className="flex gap-6 mb-6">
-            {/* Cover */}
-            <div className="flex-shrink-0 w-32 h-48 bg-gradient-to-br from-amber-100 to-amber-50 rounded-lg overflow-hidden shadow-md">
+            {/* Cover - clickable to change */}
+            <button
+              onClick={() => setShowCoverSelection(true)}
+              className="flex-shrink-0 w-32 h-48 bg-gradient-to-br from-amber-100 to-amber-50 rounded-lg overflow-hidden shadow-md relative group cursor-pointer"
+              title="Click to change cover"
+            >
               {book.coverImage ? (
                 <Image
                   src={book.coverImage}
@@ -201,7 +207,13 @@ export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove,
                   </svg>
                 </div>
               )}
-            </div>
+              {/* Hover overlay */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-medium bg-black/60 px-2 py-1 rounded">
+                  Change Cover
+                </span>
+              </div>
+            </button>
 
             {/* Title & Author */}
             <div className="flex-1">
@@ -479,6 +491,23 @@ export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove,
           onAuthorSelected={(author) => {
             setShowAuthorSelection(false);
             // Trigger a refresh to get updated book details with the new author
+            if (onRefresh) {
+              onRefresh();
+            }
+          }}
+        />
+      )}
+
+      {/* Cover Selection Modal */}
+      {showCoverSelection && (
+        <CoverSelectionModal
+          bookId={book.id}
+          bookTitle={book.title}
+          currentCover={book.coverImage}
+          onClose={() => setShowCoverSelection(false)}
+          onCoverSelected={(coverUrl) => {
+            setShowCoverSelection(false);
+            // Trigger a refresh to get updated book with the new cover
             if (onRefresh) {
               onRefresh();
             }

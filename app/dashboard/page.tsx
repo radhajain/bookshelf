@@ -27,6 +27,7 @@ import AddPodcastModal from '@/app/components/podcasts/AddPodcastModal';
 import CSVUploadModal from '@/app/components/books/CSVUploadModal';
 import ChatSidebar from '@/app/components/ChatSidebar';
 import TasteProfileModal from '@/app/components/TasteProfileModal';
+import { SkeletonGrid } from '@/app/components/SkeletonCard';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 
@@ -250,6 +251,7 @@ function DashboardPageInner() {
 	const [showAddDropdown, setShowAddDropdown] = useState(false);
 	const [showChat, setShowChat] = useState(false);
 	const [showTasteProfile, setShowTasteProfile] = useState(false);
+	const [showMobileMenu, setShowMobileMenu] = useState(false);
 	const [isEnrichmentPaused, setIsEnrichmentPaused] = useState(false);
 	const [isEnriching, setIsEnriching] = useState(false);
 	const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
@@ -1032,11 +1034,11 @@ function DashboardPageInner() {
 		<div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
 			{/* Header */}
 			<header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-amber-100 shadow-sm">
-				<div className="max-w-7xl mx-auto px-4 py-4">
+				<div className="max-w-7xl mx-auto px-4 py-3 sm:py-4">
 					<div className="flex items-center justify-between">
-						<div>
-							<h1 className="text-2xl font-bold text-zinc-900">My Shelf</h1>
-							<p className="text-sm text-zinc-500">
+						<div className="min-w-0 flex-1">
+							<h1 className="text-xl sm:text-2xl font-bold text-zinc-900">My Shelf</h1>
+							<p className="text-xs sm:text-sm text-zinc-500 truncate">
 								{authLoading ? (
 									'Loading...'
 								) : (
@@ -1056,7 +1058,7 @@ function DashboardPageInner() {
 											</>
 										)}
 										{profile?.username && (
-											<span className="ml-2">
+											<span className="hidden sm:inline ml-2">
 												&middot; Public at{' '}
 												<Link
 													href={`/u/${profile.username}`}
@@ -1070,10 +1072,129 @@ function DashboardPageInner() {
 								)}
 							</p>
 						</div>
-						<div className="flex items-center gap-3">
+
+						{/* Desktop Navigation */}
+						<div className="hidden md:flex items-center gap-2 lg:gap-3">
 							<button
 								onClick={() => setShowTasteProfile(true)}
-								className="px-3 py-2 text-sm text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-1.5 font-medium"
+								className="px-2 lg:px-3 py-2 text-sm text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-1.5 font-medium"
+							>
+								<svg
+									className="w-4 h-4"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+									/>
+								</svg>
+								<span className="hidden lg:inline">Taste Profile</span>
+							</button>
+							<button
+								onClick={() => setShowChat(true)}
+								className="px-2 lg:px-3 py-2 text-sm text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors flex items-center gap-1.5 font-medium"
+							>
+								<svg
+									className="w-4 h-4"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+									/>
+								</svg>
+								<span className="hidden lg:inline">Librarian</span>
+							</button>
+							<Link
+								href="/browse"
+								className="px-2 lg:px-3 py-2 text-sm text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+							>
+								<span className="hidden lg:inline">Browse Library</span>
+								<span className="lg:hidden">Browse</span>
+							</Link>
+							<Link
+								href="/dashboard/settings"
+								className="px-2 lg:px-3 py-2 text-sm text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+							>
+								Profile
+							</Link>
+							<button
+								onClick={signOut}
+								className="px-2 lg:px-3 py-2 text-sm text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+							>
+								Sign Out
+							</button>
+						</div>
+
+						{/* Mobile Menu Button */}
+						<div className="flex md:hidden items-center gap-2">
+							<button
+								onClick={() => setShowChat(true)}
+								className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+								aria-label="Open chat"
+							>
+								<svg
+									className="w-5 h-5"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+									/>
+								</svg>
+							</button>
+							<button
+								onClick={() => setShowMobileMenu(!showMobileMenu)}
+								className="p-2 text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+								aria-label="Toggle menu"
+							>
+								<svg
+									className="w-5 h-5"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									{showMobileMenu ? (
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={2}
+											d="M6 18L18 6M6 6l12 12"
+										/>
+									) : (
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={2}
+											d="M4 6h16M4 12h16M4 18h16"
+										/>
+									)}
+								</svg>
+							</button>
+						</div>
+					</div>
+
+					{/* Mobile Menu Dropdown */}
+					{showMobileMenu && (
+						<div className="md:hidden mt-3 pt-3 border-t border-zinc-200 space-y-1">
+							<button
+								onClick={() => {
+									setShowTasteProfile(true);
+									setShowMobileMenu(false);
+								}}
+								className="w-full px-3 py-2.5 text-left text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-2 font-medium"
 							>
 								<svg
 									className="w-4 h-4"
@@ -1090,58 +1211,54 @@ function DashboardPageInner() {
 								</svg>
 								Taste Profile
 							</button>
-							<button
-								onClick={() => setShowChat(true)}
-								className="px-3 py-2 text-sm text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors flex items-center gap-1.5 font-medium"
-							>
-								<svg
-									className="w-4 h-4"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-									/>
-								</svg>
-								Librarian
-							</button>
 							<Link
 								href="/browse"
-								className="px-3 py-2 text-sm text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+								onClick={() => setShowMobileMenu(false)}
+								className="block px-3 py-2.5 text-sm text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
 							>
 								Browse Library
 							</Link>
 							<Link
 								href="/dashboard/settings"
-								className="px-3 py-2 text-sm text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+								onClick={() => setShowMobileMenu(false)}
+								className="block px-3 py-2.5 text-sm text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
 							>
-								Profile
+								Profile Settings
 							</Link>
+							{profile?.username && (
+								<Link
+									href={`/u/${profile.username}`}
+									onClick={() => setShowMobileMenu(false)}
+									className="block px-3 py-2.5 text-sm text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+								>
+									View Public Profile
+								</Link>
+							)}
 							<button
-								onClick={signOut}
-								className="px-3 py-2 text-sm text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+								onClick={() => {
+									signOut();
+									setShowMobileMenu(false);
+								}}
+								className="w-full px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
 							>
 								Sign Out
 							</button>
 						</div>
-					</div>
+					)}
 				</div>
 			</header>
 
 			{/* Actions Bar */}
-			<div className="sticky top-[73px] z-20 bg-white/90 backdrop-blur-sm border-b border-zinc-100">
-				<div className="max-w-7xl mx-auto px-4 py-3">
-					<div className="flex items-center justify-between flex-wrap gap-3">
-						<div className="flex gap-3">
+			<div className="sticky top-[57px] sm:top-[65px] md:top-[73px] z-20 bg-white/90 backdrop-blur-sm border-b border-zinc-100">
+				<div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
+					<div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+						{/* First row on mobile: Add button + Search */}
+						<div className="flex items-center gap-2 sm:gap-3">
 							{/* Add Dropdown */}
 							<div className="relative">
 								<button
 									onClick={() => setShowAddDropdown(!showAddDropdown)}
-									className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+									className="px-3 sm:px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base"
 								>
 									<svg
 										className="w-5 h-5"
@@ -1278,65 +1395,65 @@ function DashboardPageInner() {
 									</>
 								)}
 							</div>
+
+							{/* Search Input - grows to fill space on larger screens */}
+							{totalItems > 0 && (
+								<div className="flex-1 min-w-0 sm:max-w-xs">
+									<div className="relative">
+										<svg
+											className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={2}
+												d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+											/>
+										</svg>
+										<input
+											type="text"
+											placeholder="Search..."
+											value={searchQuery}
+											onChange={(e) => setSearchQuery(e.target.value)}
+											className="w-full pl-9 pr-8 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-colors"
+										/>
+										{searchQuery && (
+											<button
+												onClick={() => setSearchQuery('')}
+												className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-600"
+											>
+												<svg
+													className="w-4 h-4"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M6 18L18 6M6 6l12 12"
+													/>
+												</svg>
+											</button>
+										)}
+									</div>
+								</div>
+							)}
 						</div>
 
-						{/* Search Input */}
+						{/* Second row on mobile: Filters */}
 						{totalItems > 0 && (
-							<div className="flex-1 max-w-xs min-w-[200px]">
-								<div className="relative">
-									<svg
-										className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={2}
-											d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-										/>
-									</svg>
-									<input
-										type="text"
-										placeholder="Search your shelf..."
-										value={searchQuery}
-										onChange={(e) => setSearchQuery(e.target.value)}
-										className="w-full pl-9 pr-4 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-colors"
-									/>
-									{searchQuery && (
-										<button
-											onClick={() => setSearchQuery('')}
-											className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-600"
-										>
-											<svg
-												className="w-4 h-4"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth={2}
-													d="M6 18L18 6M6 6l12 12"
-												/>
-											</svg>
-										</button>
-									)}
-								</div>
-							</div>
-						)}
-
-						{/* Media Type & Genre Filter & Collapse Controls */}
-						{totalItems > 0 && (
-							<div className="flex items-center gap-3">
+							<div className="flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-hide">
 								{/* Media Type Filter */}
 								{(userMovies.length > 0 || userPodcasts.length > 0) && (
-									<div className="flex items-center gap-2">
+									<div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
 										<label
 											htmlFor="media-type-filter"
-											className="text-sm text-zinc-500"
+											className="text-xs sm:text-sm text-zinc-500 hidden sm:inline"
 										>
 											Type:
 										</label>
@@ -1346,7 +1463,7 @@ function DashboardPageInner() {
 											onChange={(e) =>
 												setMediaTypeFilter(e.target.value as MediaTypeFilter)
 											}
-											className="px-3 py-1.5 text-sm border border-zinc-200 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+											className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-zinc-200 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										>
 											<option value="all">All ({totalItems})</option>
 											<option value="books">Books ({userBooks.length})</option>
@@ -1361,10 +1478,10 @@ function DashboardPageInner() {
 								)}
 
 								{/* Genre Filter */}
-								<div className="flex items-center gap-2">
+								<div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
 									<label
 										htmlFor="genre-filter"
-										className="text-sm text-zinc-500"
+										className="text-xs sm:text-sm text-zinc-500 hidden sm:inline"
 									>
 										Genre:
 									</label>
@@ -1372,7 +1489,7 @@ function DashboardPageInner() {
 										id="genre-filter"
 										value={selectedGenreFilter}
 										onChange={(e) => setSelectedGenreFilter(e.target.value)}
-										className="px-3 py-1.5 text-sm border border-zinc-200 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+										className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-zinc-200 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 max-w-[140px] sm:max-w-none"
 									>
 										<option value="all">All Genres</option>
 										{sortedGenres.map((genre) => {
@@ -1391,7 +1508,7 @@ function DashboardPageInner() {
 
 								{/* Collapse/Expand All */}
 								{selectedGenreFilter === 'all' && sortedGenres.length > 1 && (
-									<div className="flex items-center gap-1 border-l border-zinc-200 pl-3">
+									<div className="hidden sm:flex items-center gap-1 border-l border-zinc-200 pl-2 sm:pl-3 flex-shrink-0">
 										<button
 											onClick={expandAllGenres}
 											className="p-1.5 text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 rounded transition-colors"
@@ -1497,20 +1614,13 @@ function DashboardPageInner() {
 			</div>
 
 			{/* Main Content */}
-			<main className="max-w-7xl mx-auto px-4 py-8">
+			<main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 lg:py-8">
 				{authLoading || loading ? (
-					<div className="flex flex-col items-center justify-center py-20">
-						<div className="w-16 h-16 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin mb-4" />
-						<p className="text-zinc-500">
-							{authLoading
-								? 'Checking authentication...'
-								: 'Loading your bookshelf...'}
-						</p>
-					</div>
+					<SkeletonGrid count={8} />
 				) : totalItems === 0 ? (
-					<div className="text-center py-20">
+					<div className="text-center py-12 sm:py-20">
 						<svg
-							className="w-16 h-16 text-zinc-300 mx-auto mb-4"
+							className="w-12 h-12 sm:w-16 sm:h-16 text-zinc-300 mx-auto mb-3 sm:mb-4"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -1522,28 +1632,28 @@ function DashboardPageInner() {
 								d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
 							/>
 						</svg>
-						<h2 className="text-xl font-semibold text-zinc-700 mb-2">
+						<h2 className="text-lg sm:text-xl font-semibold text-zinc-700 mb-2">
 							Your shelf is empty
 						</h2>
-						<p className="text-zinc-500 mb-6">
+						<p className="text-sm sm:text-base text-zinc-500 mb-4 sm:mb-6 px-4">
 							Add books, movies, or podcasts to get started
 						</p>
-						<div className="flex justify-center gap-3">
+						<div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3 px-4">
 							<button
 								onClick={() => setShowAddModal(true)}
-								className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-lg transition-colors"
+								className="px-4 py-2.5 sm:py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors"
 							>
 								Add a Book
 							</button>
 							<button
 								onClick={() => setShowAddMovieModal(true)}
-								className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors"
+								className="px-4 py-2.5 sm:py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors"
 							>
 								Add a Movie
 							</button>
 							<button
 								onClick={() => setShowAddPodcastModal(true)}
-								className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg transition-colors"
+								className="px-4 py-2.5 sm:py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium rounded-lg transition-colors"
 							>
 								Add a Podcast
 							</button>
@@ -1583,13 +1693,13 @@ function DashboardPageInner() {
 								(showPodcasts ? genrePodcasts.length : 0);
 
 							return (
-								<section key={genre} className="mb-8">
+								<section key={genre} className="mb-6 sm:mb-8">
 									<button
 										onClick={() =>
 											selectedGenreFilter === 'all' &&
 											toggleGenreCollapsed(genre)
 										}
-										className={`w-full flex items-center gap-3 mb-4 pb-3 border-b-2 border-zinc-200 text-left group ${
+										className={`w-full flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 pb-2 sm:pb-3 border-b-2 border-zinc-200 text-left group ${
 											selectedGenreFilter === 'all'
 												? 'cursor-pointer hover:border-amber-300'
 												: 'cursor-default'
@@ -1597,7 +1707,7 @@ function DashboardPageInner() {
 									>
 										{selectedGenreFilter === 'all' && (
 											<svg
-												className={`w-5 h-5 text-zinc-400 group-hover:text-zinc-600 transition-transform ${
+												className={`w-4 h-4 sm:w-5 sm:h-5 text-zinc-400 group-hover:text-zinc-600 transition-transform ${
 													isCollapsed ? '' : 'rotate-90'
 												}`}
 												fill="none"
@@ -1612,13 +1722,13 @@ function DashboardPageInner() {
 												/>
 											</svg>
 										)}
-										<h2 className="text-xl font-bold text-zinc-800">{genre}</h2>
-										<span className="px-2.5 py-0.5 rounded-full text-sm font-medium bg-zinc-100 text-zinc-600">
+										<h2 className="text-base sm:text-lg lg:text-xl font-bold text-zinc-800">{genre}</h2>
+										<span className="px-2 sm:px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-medium bg-zinc-100 text-zinc-600">
 											{itemCount}
 										</span>
 									</button>
 									{!isCollapsed && (
-										<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+										<div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
 											{/* Render books */}
 											{showBooks &&
 												genreBooks.map((ub) => (
@@ -1779,8 +1889,26 @@ export default function DashboardPage() {
 	return (
 		<Suspense
 			fallback={
-				<div className="min-h-screen bg-gradient-to-b from-amber-50 to-white flex items-center justify-center">
-					<div className="w-16 h-16 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
+				<div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
+					{/* Header skeleton */}
+					<header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-amber-100 shadow-sm">
+						<div className="max-w-7xl mx-auto px-4 py-4">
+							<div className="flex items-center justify-between">
+								<div>
+									<div className="h-7 w-32 bg-zinc-200 rounded animate-pulse mb-2" />
+									<div className="h-4 w-48 bg-zinc-100 rounded animate-pulse" />
+								</div>
+								<div className="flex items-center gap-3">
+									<div className="h-9 w-24 bg-zinc-100 rounded-lg animate-pulse" />
+									<div className="h-9 w-24 bg-zinc-100 rounded-lg animate-pulse" />
+								</div>
+							</div>
+						</div>
+					</header>
+					{/* Content skeleton */}
+					<main className="max-w-7xl mx-auto px-4 py-8">
+						<SkeletonGrid count={8} />
+					</main>
 				</div>
 			}
 		>
