@@ -33,15 +33,6 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Book card hover effect */
-.book-card {
-  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-}
-
-.book-card:hover {
-  transform: translateY(-4px);
-}
-
 /* Line clamp utilities */
 .line-clamp-2 {
   display: -webkit-box;

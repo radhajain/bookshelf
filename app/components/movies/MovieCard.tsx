@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import Image from 'next/image';
 import { MovieWithDetails, MovieRatingSource, formatRuntime } from '../../lib/movies';
+import { ContentCard } from '../shared';
 
 interface MovieCardProps {
   movie: MovieWithDetails;
   onClick: () => void;
+  showTypeLabel?: boolean;
 }
 
 function MiniRating({ rating }: { rating: MovieRatingSource }) {
@@ -70,79 +70,22 @@ function MiniRating({ rating }: { rating: MovieRatingSource }) {
   );
 }
 
-export default function MovieCard({ movie, onClick }: MovieCardProps) {
-  const [imageError, setImageError] = useState(false);
-
+export default function MovieCard({ movie, onClick, showTypeLabel = true }: MovieCardProps) {
   // Get ratings that have actual values
   const ratingsWithData = movie.ratings.filter((r) => r.rating);
 
-  // Truncate description
-  const truncatedDescription = movie.description
-    ? movie.description.length > 100
-      ? movie.description.slice(0, 100).trim() + '...'
-      : movie.description
-    : null;
-
   return (
-    <div
+    <ContentCard
+      title={movie.title}
+      creator={movie.director}
+      coverImage={movie.posterImage}
+      contentType="movie"
+      genre={movie.genre}
+      description={movie.description}
       onClick={onClick}
-      className="group relative flex flex-col bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-zinc-100 cursor-pointer hover:-translate-y-1"
-    >
-      {/* Movie Poster - responsive height */}
-      <div className="relative h-48 sm:h-64 md:h-80 lg:h-96 bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center overflow-hidden">
-        {movie.posterImage && !imageError ? (
-          <Image
-            src={movie.posterImage}
-            alt={`Poster of ${movie.title}`}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
-            onError={() => setImageError(true)}
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          />
-        ) : (
-          <div className="absolute inset-0 bg-white flex items-center justify-center p-4 sm:p-6">
-            <h3 className="font-serif text-sm sm:text-base lg:text-lg text-zinc-800 text-center leading-snug line-clamp-4">
-              {movie.title}
-            </h3>
-          </div>
-        )}
-
-        {/* Click indicator - hidden on mobile */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors hidden sm:flex items-center justify-center">
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 px-3 py-1 rounded-full text-xs font-medium text-zinc-700 shadow">
-            View Details
-          </span>
-        </div>
-
-        {/* Type Badge - smaller on mobile */}
-        <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2">
-          <span className="px-1.5 sm:px-2 py-0.5 bg-blue-500 text-white text-[10px] sm:text-xs font-medium rounded-full">
-            Movie
-          </span>
-        </div>
-
-        {/* Year badge - smaller on mobile */}
-        {movie.year && (
-          <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-black/70 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded">
-            {movie.year}
-          </div>
-        )}
-      </div>
-
-      {/* Movie Info - responsive padding */}
-      <div className="flex flex-col flex-1 p-2.5 sm:p-3 lg:p-4">
-        {/* Title */}
-        <h3 className="font-semibold text-zinc-900 text-xs sm:text-sm leading-tight mb-0.5 sm:mb-1 line-clamp-2">
-          {movie.title}
-        </h3>
-
-        {/* Director */}
-        {movie.director && (
-          <p className="text-[10px] sm:text-xs text-zinc-500 mb-1.5 sm:mb-2 truncate">dir. {movie.director}</p>
-        )}
-
-        {/* Ratings - hidden on very small screens */}
-        <div className="mb-1.5 sm:mb-2 space-y-0.5 hidden sm:block">
+      showTypeLabel={showTypeLabel}
+      renderRatings={() => (
+        <>
           {ratingsWithData.length > 0 ? (
             ratingsWithData
               .slice(0, 2)
@@ -154,21 +97,10 @@ export default function MovieCard({ movie, onClick }: MovieCardProps) {
               Click to see reviews
             </span>
           )}
-        </div>
-
-        {/* Description - hidden on mobile */}
-        <div className="flex-1 hidden lg:block">
-          {truncatedDescription ? (
-            <p className="text-xs text-zinc-600 leading-relaxed line-clamp-3">
-              {truncatedDescription}
-            </p>
-          ) : (
-            <p className="text-xs text-zinc-400 italic">Click for details</p>
-          )}
-        </div>
-
-        {/* Footer - simplified on mobile */}
-        <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-zinc-100 flex flex-wrap gap-1.5 sm:gap-2">
+        </>
+      )}
+      renderFooterBadges={() => (
+        <>
           {movie.runtime && (
             <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-medium bg-zinc-100 text-zinc-600">
               {formatRuntime(movie.runtime)}
@@ -185,8 +117,17 @@ export default function MovieCard({ movie, onClick }: MovieCardProps) {
               {movie.notes}
             </span>
           )}
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+      renderCornerBadge={
+        movie.year
+          ? () => (
+              <span className="bg-black/70 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded">
+                {movie.year}
+              </span>
+            )
+          : undefined
+      }
+    />
   );
 }

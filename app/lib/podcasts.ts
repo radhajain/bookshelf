@@ -31,30 +31,6 @@ export interface PodcastWithDetails extends Podcast {
   detailsFetchedAt?: string;
 }
 
-// Podcast genre categories (commonly used)
-export const PODCAST_GENRE_CATEGORIES = [
-  'Arts',
-  'Business',
-  'Comedy',
-  'Education',
-  'Fiction',
-  'Government',
-  'Health & Fitness',
-  'History',
-  'Kids & Family',
-  'Leisure',
-  'Music',
-  'News',
-  'Religion & Spirituality',
-  'Science',
-  'Society & Culture',
-  'Sports',
-  'Technology',
-  'True Crime',
-  'TV & Film',
-  'Uncategorized',
-] as const;
-
 // Map iTunes genre IDs to genre names
 export const ITUNES_GENRE_MAP: Record<number, string> = {
   1301: 'Arts',
@@ -77,43 +53,6 @@ export const ITUNES_GENRE_MAP: Record<number, string> = {
   1488: 'True Crime',
   1309: 'TV & Film',
 };
-
-// Group podcasts by genre
-export function getPodcastsByGenre(podcasts: Podcast[]): Record<string, Podcast[]> {
-  const grouped: Record<string, Podcast[]> = {};
-
-  for (const podcast of podcasts) {
-    const genre = podcast.genre || 'Uncategorized';
-    if (!grouped[genre]) {
-      grouped[genre] = [];
-    }
-    grouped[genre].push(podcast);
-  }
-
-  // Sort genres alphabetically, but put "Uncategorized" last
-  const sortedGrouped: Record<string, Podcast[]> = {};
-  const sortedKeys = Object.keys(grouped).sort((a, b) => {
-    if (a === 'Uncategorized') return 1;
-    if (b === 'Uncategorized') return -1;
-    return a.localeCompare(b);
-  });
-
-  for (const key of sortedKeys) {
-    sortedGrouped[key] = grouped[key];
-  }
-
-  return sortedGrouped;
-}
-
-// Get all unique genres from a list of podcasts
-export function getPodcastGenres(podcasts: Podcast[]): string[] {
-  const genres = new Set(podcasts.map(podcast => podcast.genre || 'Uncategorized'));
-  return Array.from(genres).sort((a, b) => {
-    if (a === 'Uncategorized') return 1;
-    if (b === 'Uncategorized') return -1;
-    return a.localeCompare(b);
-  });
-}
 
 // Format episode count
 export function formatEpisodeCount(count?: number): string {

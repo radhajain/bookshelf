@@ -747,32 +747,3 @@ export async function fetchBookDetails(book: Book): Promise<BookWithDetails> {
   cache.set(cacheKey, bookWithDetails);
   return bookWithDetails;
 }
-
-// Fetch details for multiple books with batching
-export async function fetchBooksDetails(books: Book[]): Promise<BookWithDetails[]> {
-  const results: BookWithDetails[] = [];
-  const BATCH_SIZE = 3; // Smaller batch size to be gentler on APIs
-
-  for (let i = 0; i < books.length; i += BATCH_SIZE) {
-    const batch = books.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.all(
-      batch.map(book => fetchBookDetails(book))
-    );
-    results.push(...batchResults);
-  }
-
-  return results;
-}
-
-// Fetch details for books by genre
-export async function fetchBooksByGenre(
-  booksByGenre: Record<string, Book[]>
-): Promise<Record<string, BookWithDetails[]>> {
-  const result: Record<string, BookWithDetails[]> = {};
-
-  for (const [genre, books] of Object.entries(booksByGenre)) {
-    result[genre] = await fetchBooksDetails(books);
-  }
-
-  return result;
-}

@@ -39,29 +39,6 @@ export interface MovieWithDetails extends Movie {
   detailsFetchedAt?: string;
 }
 
-// Movie genre categories (commonly used in film)
-export const MOVIE_GENRE_CATEGORIES = [
-  'Action',
-  'Adventure',
-  'Animation',
-  'Comedy',
-  'Crime',
-  'Documentary',
-  'Drama',
-  'Family',
-  'Fantasy',
-  'History',
-  'Horror',
-  'Music',
-  'Mystery',
-  'Romance',
-  'Science Fiction',
-  'Thriller',
-  'War',
-  'Western',
-  'Uncategorized',
-] as const;
-
 // Map TMDB genre IDs to genre names
 export const TMDB_GENRE_MAP: Record<number, string> = {
   28: 'Action',
@@ -84,43 +61,6 @@ export const TMDB_GENRE_MAP: Record<number, string> = {
   10752: 'War',
   37: 'Western',
 };
-
-// Group movies by genre
-export function getMoviesByGenre(movies: Movie[]): Record<string, Movie[]> {
-  const grouped: Record<string, Movie[]> = {};
-
-  for (const movie of movies) {
-    const genre = movie.genre || 'Uncategorized';
-    if (!grouped[genre]) {
-      grouped[genre] = [];
-    }
-    grouped[genre].push(movie);
-  }
-
-  // Sort genres alphabetically, but put "Uncategorized" last
-  const sortedGrouped: Record<string, Movie[]> = {};
-  const sortedKeys = Object.keys(grouped).sort((a, b) => {
-    if (a === 'Uncategorized') return 1;
-    if (b === 'Uncategorized') return -1;
-    return a.localeCompare(b);
-  });
-
-  for (const key of sortedKeys) {
-    sortedGrouped[key] = grouped[key];
-  }
-
-  return sortedGrouped;
-}
-
-// Get all unique genres from a list of movies
-export function getMovieGenres(movies: Movie[]): string[] {
-  const genres = new Set(movies.map(movie => movie.genre || 'Uncategorized'));
-  return Array.from(genres).sort((a, b) => {
-    if (a === 'Uncategorized') return 1;
-    if (b === 'Uncategorized') return -1;
-    return a.localeCompare(b);
-  });
-}
 
 // Format runtime in hours and minutes
 export function formatRuntime(minutes?: number): string {

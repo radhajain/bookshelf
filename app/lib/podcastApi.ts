@@ -1,4 +1,4 @@
-import { Podcast, PodcastWithDetails, PodcastRatingSource, getPrimaryGenre, ITUNES_GENRE_MAP } from './podcasts';
+import { Podcast, PodcastWithDetails, PodcastRatingSource, getPrimaryGenre } from './podcasts';
 
 // iTunes API types
 interface iTunesPodcastResult {
