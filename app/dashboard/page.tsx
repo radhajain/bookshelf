@@ -10,10 +10,13 @@ import {
 	DbMovie,
 	UserPodcastWithDetails,
 	DbPodcast,
+	UserArticleWithDetails,
+	DbArticle,
 } from '@/app/lib/types/database';
 import { BookWithDetails, RatingSource } from '@/app/lib/books';
 import { MovieWithDetails, MovieRatingSource } from '@/app/lib/movies';
 import { PodcastWithDetails, PodcastRatingSource } from '@/app/lib/podcasts';
+import { ArticleWithDetails } from '@/app/lib/articles';
 import { RateLimitError } from '@/app/lib/bookApi';
 import BookCard from '@/app/components/BookCard';
 import BookDetailsSidebar from '@/app/components/BookDetailsSidebar';
@@ -21,6 +24,8 @@ import MovieCard from '@/app/components/movies/MovieCard';
 import MovieDetailsSidebar from '@/app/components/movies/MovieDetailsSidebar';
 import PodcastCard from '@/app/components/PodcastCard';
 import PodcastDetailsSidebar from '@/app/components/podcasts/PodcastDetailsSidebar';
+import ArticleCard from '@/app/components/ArticleCard';
+import { AddArticleModal, ArticleDetailsSidebar } from '@/app/components/articles';
 import AddBookModal from '@/app/components/books/AddBookModal';
 import AddMovieModal from '@/app/components/movies/AddMovieModal';
 import AddPodcastModal from '@/app/components/podcasts/AddPodcastModal';
@@ -32,7 +37,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 // Media type filter
-type MediaTypeFilter = 'all' | 'books' | 'movies' | 'podcasts';
+type MediaTypeFilter = 'all' | 'books' | 'movies' | 'podcasts' | 'articles';
 
 // Convert DB book to BookWithDetails format
 function dbBookToBookWithDetails(
@@ -196,6 +201,31 @@ function dbPodcastToPodcastWithDetails(
 	};
 }
 
+// Convert DB article to ArticleWithDetails format
+function dbArticleToArticleWithDetails(
+	dbArticle: DbArticle,
+	userArticle?: UserArticleWithDetails,
+): ArticleWithDetails {
+	return {
+		id: dbArticle.id,
+		title: dbArticle.title,
+		author: dbArticle.author || undefined,
+		publication: dbArticle.publication || undefined,
+		publicationDate: dbArticle.publication_date || undefined,
+		articleUrl: dbArticle.article_url,
+		genre: userArticle?.genre || dbArticle.section || 'Uncategorized',
+		notes: userArticle?.notes || undefined,
+		priority: userArticle?.priority || undefined,
+		read: userArticle?.read || false,
+		readAt: userArticle?.read_at || undefined,
+		description: dbArticle.description || undefined,
+		thumbnailImage: dbArticle.thumbnail_image || undefined,
+		section: dbArticle.section || undefined,
+		readingTimeMinutes: dbArticle.reading_time_minutes || undefined,
+		detailsFetchedAt: dbArticle.details_fetched_at || undefined,
+	};
+}
+
 function DashboardPageInner() {
 	const searchParams = useSearchParams();
 	const router = useRouter();
@@ -213,6 +243,9 @@ function DashboardPageInner() {
 	const [userPodcasts, setUserPodcasts] = useState<UserPodcastWithDetails[]>(
 		[],
 	);
+	const [userArticles, setUserArticles] = useState<UserArticleWithDetails[]>(
+		[],
+	);
 	const [enrichedBooks, setEnrichedBooks] = useState<
 		Map<string, BookWithDetails>
 	>(new Map());
@@ -221,6 +254,9 @@ function DashboardPageInner() {
 	>(new Map());
 	const [enrichedPodcasts, setEnrichedPodcasts] = useState<
 		Map<string, PodcastWithDetails>
+	>(new Map());
+	const [enrichedArticles, setEnrichedArticles] = useState<
+		Map<string, ArticleWithDetails>
 	>(new Map());
 	const [loading, setLoading] = useState(true);
 	const [loadingProgress, setLoadingProgress] = useState({
@@ -244,9 +280,15 @@ function DashboardPageInner() {
 	const [selectedUserPodcastId, setSelectedUserPodcastId] = useState<
 		string | null
 	>(null);
+	const [selectedArticle, setSelectedArticle] =
+		useState<ArticleWithDetails | null>(null);
+	const [selectedUserArticleId, setSelectedUserArticleId] = useState<
+		string | null
+	>(null);
 	const [showAddModal, setShowAddModal] = useState(false);
 	const [showAddMovieModal, setShowAddMovieModal] = useState(false);
 	const [showAddPodcastModal, setShowAddPodcastModal] = useState(false);
+	const [showAddArticleModal, setShowAddArticleModal] = useState(false);
 	const [showCSVModal, setShowCSVModal] = useState(false);
 	const [showAddDropdown, setShowAddDropdown] = useState(false);
 	const [showChat, setShowChat] = useState(false);
@@ -423,6 +465,23 @@ function DashboardPageInner() {
 		[],
 	);
 
+	const enrichArticles = useCallback(
+		async (articles: UserArticleWithDetails[]) => {
+			const enriched = new Map<string, ArticleWithDetails>();
+
+			for (const ua of articles) {
+				// Articles don't need external API enrichment like books/movies
+				// Just convert the DB format to the app format
+				enriched.set(
+					ua.article_id,
+					dbArticleToArticleWithDetails(ua.article, ua),
+				);
+				setEnrichedArticles(new Map(enriched));
+			}
+		},
+		[],
+	);
+
 	useEffect(() => {
 		if (!user) return;
 
@@ -431,8 +490,8 @@ function DashboardPageInner() {
 		const fetchData = async () => {
 			setLoading(true);
 
-			// Fetch books, movies, and podcasts in parallel
-			const [booksResult, moviesResult, podcastsResult] = await Promise.all([
+			// Fetch books, movies, podcasts, and articles in parallel
+			const [booksResult, moviesResult, podcastsResult, articlesResult] = await Promise.all([
 				supabase
 					.from('user_books')
 					.select(
@@ -463,6 +522,16 @@ function DashboardPageInner() {
 					)
 					.eq('user_id', user.id)
 					.order('created_at', { ascending: false }),
+				supabase
+					.from('user_articles')
+					.select(
+						`
+						*,
+						article:articles(*)
+					`,
+					)
+					.eq('user_id', user.id)
+					.order('created_at', { ascending: false }),
 			]);
 
 			if (!cancelled) {
@@ -481,6 +550,11 @@ function DashboardPageInner() {
 					// Enrich podcasts in background
 					enrichPodcasts(podcastsResult.data as UserPodcastWithDetails[]);
 				}
+				if (!articlesResult.error && articlesResult.data) {
+					setUserArticles(articlesResult.data as UserArticleWithDetails[]);
+					// Enrich articles in background
+					enrichArticles(articlesResult.data as UserArticleWithDetails[]);
+				}
 				setLoading(false);
 			}
 		};
@@ -490,7 +564,7 @@ function DashboardPageInner() {
 		return () => {
 			cancelled = true;
 		};
-	}, [user, supabase, enrichBooks, enrichMovies, enrichPodcasts]);
+	}, [user, supabase, enrichBooks, enrichMovies, enrichPodcasts, enrichArticles]);
 
 	// Update URL when selecting/deselecting a book
 	const selectBook = useCallback(
@@ -533,6 +607,22 @@ function DashboardPageInner() {
 			// Update URL without full page reload
 			if (podcast) {
 				router.push(`/dashboard?podcast=${podcast.id}`, { scroll: false });
+			} else {
+				router.push('/dashboard', { scroll: false });
+			}
+		},
+		[router],
+	);
+
+	// Update URL when selecting/deselecting an article
+	const selectArticle = useCallback(
+		(article: ArticleWithDetails | null, userArticleId: string | null) => {
+			setSelectedArticle(article);
+			setSelectedUserArticleId(userArticleId);
+
+			// Update URL without full page reload
+			if (article) {
+				router.push(`/dashboard?article=${article.id}`, { scroll: false });
 			} else {
 				router.push('/dashboard', { scroll: false });
 			}
@@ -634,6 +724,25 @@ function DashboardPageInner() {
 		}
 	}, [user, supabase, enrichPodcasts]);
 
+	const reloadArticles = useCallback(async () => {
+		if (!user) return;
+		const { data, error } = await supabase
+			.from('user_articles')
+			.select(
+				`
+				*,
+				article:articles(*)
+			`,
+			)
+			.eq('user_id', user.id)
+			.order('created_at', { ascending: false });
+
+		if (!error && data) {
+			setUserArticles(data as UserArticleWithDetails[]);
+			enrichArticles(data as UserArticleWithDetails[]);
+		}
+	}, [user, supabase, enrichArticles]);
+
 	const handleBookAdded = useCallback(() => {
 		void reloadBooks();
 		setShowAddModal(false);
@@ -649,6 +758,11 @@ function DashboardPageInner() {
 		void reloadPodcasts();
 		setShowAddPodcastModal(false);
 	}, [reloadPodcasts]);
+
+	const handleArticleAdded = useCallback(() => {
+		void reloadArticles();
+		setShowAddArticleModal(false);
+	}, [reloadArticles]);
 
 	const handleRemoveBook = async (userBookId: string) => {
 		const { error } = await supabase
@@ -685,6 +799,56 @@ function DashboardPageInner() {
 			setSelectedPodcast(null);
 		}
 	};
+
+	const handleRemoveArticle = async (userArticleId: string) => {
+		const { error } = await supabase
+			.from('user_articles')
+			.delete()
+			.eq('id', userArticleId);
+
+		if (!error) {
+			setUserArticles(userArticles.filter((ua) => ua.id !== userArticleId));
+			setSelectedArticle(null);
+		}
+	};
+
+	const handleUpdateArticle = useCallback(
+		async (updates: Partial<ArticleWithDetails>) => {
+			if (!selectedUserArticleId) return;
+			try {
+				const response = await fetch(
+					`/api/user-articles?id=${selectedUserArticleId}`,
+					{
+						method: 'PATCH',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							read: updates.read,
+							read_at: updates.readAt,
+							notes: updates.notes,
+							priority: updates.priority,
+							genre: updates.genre,
+						}),
+					},
+				);
+				if (response.ok) {
+					// Update local state
+					setUserArticles((prev) =>
+						prev.map((ua) =>
+							ua.id === selectedUserArticleId
+								? { ...ua, read: updates.read ?? ua.read, read_at: updates.readAt ?? ua.read_at }
+								: ua,
+						),
+					);
+					if (selectedArticle) {
+						setSelectedArticle({ ...selectedArticle, ...updates });
+					}
+				}
+			} catch (error) {
+				console.error('Error updating article:', error);
+			}
+		},
+		[selectedUserArticleId, selectedArticle],
+	);
 
 	const handleRefreshPodcast = useCallback(
 		async (podcastId: string) => {
@@ -908,6 +1072,39 @@ function DashboardPageInner() {
 		[enrichedPodcasts],
 	);
 
+	// Convert UserArticle to ArticleWithDetails for display
+	const getArticleWithDetails = useCallback(
+		(ua: UserArticleWithDetails): ArticleWithDetails => {
+			const enriched = enrichedArticles.get(ua.article_id);
+			if (enriched) {
+				return {
+					...enriched,
+					notes: ua.notes || undefined,
+					priority: ua.priority || undefined,
+					read: ua.read || false,
+					readAt: ua.read_at || undefined,
+				};
+			}
+			return {
+				id: ua.article_id,
+				title: ua.article.title,
+				author: ua.article.author || undefined,
+				publication: ua.article.publication || undefined,
+				publicationDate: ua.article.publication_date || undefined,
+				articleUrl: ua.article.article_url,
+				genre: ua.genre || ua.article.section || 'Uncategorized',
+				notes: ua.notes || undefined,
+				priority: ua.priority || undefined,
+				read: ua.read || false,
+				readAt: ua.read_at || undefined,
+				description: ua.article.description || undefined,
+				thumbnailImage: ua.article.thumbnail_image || undefined,
+				section: ua.article.section || undefined,
+			};
+		},
+		[enrichedArticles],
+	);
+
 	// Handle deep linking - open book from URL param
 	useEffect(() => {
 		const bookId = searchParams.get('book');
@@ -946,6 +1143,20 @@ function DashboardPageInner() {
 		}
 	}, [searchParams, userPodcasts, loading, getPodcastWithDetails]);
 
+	// Handle deep linking - open article from URL param
+	useEffect(() => {
+		const articleId = searchParams.get('article');
+		if (articleId && userArticles.length > 0 && !loading) {
+			const userArticle = userArticles.find(
+				(ua) => ua.article_id === articleId,
+			);
+			if (userArticle) {
+				setSelectedArticle(getArticleWithDetails(userArticle));
+				setSelectedUserArticleId(userArticle.id);
+			}
+		}
+	}, [searchParams, userArticles, loading, getArticleWithDetails]);
+
 	// Filter books and movies by search query
 	const filteredUserBooks = searchQuery
 		? userBooks.filter((ub) => {
@@ -981,6 +1192,18 @@ function DashboardPageInner() {
 			})
 		: userPodcasts;
 
+	const filteredUserArticles = searchQuery
+		? userArticles.filter((ua) => {
+				const query = searchQuery.toLowerCase();
+				return (
+					ua.article.title.toLowerCase().includes(query) ||
+					ua.article.author?.toLowerCase().includes(query) ||
+					ua.article.publication?.toLowerCase().includes(query) ||
+					ua.notes?.toLowerCase().includes(query)
+				);
+			})
+		: userArticles;
+
 	// Group books by genre (genre is now on the book, not user_books)
 	const booksByGenre = filteredUserBooks.reduce(
 		(acc, ub) => {
@@ -1014,11 +1237,23 @@ function DashboardPageInner() {
 		{} as Record<string, UserPodcastWithDetails[]>,
 	);
 
-	// Combined genres (union of book, movie, and podcast genres)
+	// Group articles by genre
+	const articlesByGenre = filteredUserArticles.reduce(
+		(acc, ua) => {
+			const genre = ua.genre || ua.article.section || 'Uncategorized';
+			if (!acc[genre]) acc[genre] = [];
+			acc[genre].push(ua);
+			return acc;
+		},
+		{} as Record<string, UserArticleWithDetails[]>,
+	);
+
+	// Combined genres (union of book, movie, podcast, and article genres)
 	const allGenres = new Set([
 		...Object.keys(booksByGenre),
 		...Object.keys(moviesByGenre),
 		...Object.keys(podcastsByGenre),
+		...Object.keys(articlesByGenre),
 	]);
 
 	const sortedGenres = Array.from(allGenres).sort((a, b) => {
@@ -1028,7 +1263,7 @@ function DashboardPageInner() {
 	});
 
 	// Total item count
-	const totalItems = userBooks.length + userMovies.length + userPodcasts.length;
+	const totalItems = userBooks.length + userMovies.length + userPodcasts.length + userArticles.length;
 
 	return (
 		<div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
@@ -1055,6 +1290,12 @@ function DashboardPageInner() {
 											<>
 												, {userPodcasts.length}{' '}
 												{userPodcasts.length === 1 ? 'podcast' : 'podcasts'}
+											</>
+										)}
+										{userArticles.length > 0 && (
+											<>
+												, {userArticles.length}{' '}
+												{userArticles.length === 1 ? 'article' : 'articles'}
 											</>
 										)}
 										{profile?.username && (
@@ -1365,6 +1606,30 @@ function DashboardPageInner() {
 													Podcast
 												</span>
 											</button>
+											<button
+												onClick={() => {
+													setShowAddArticleModal(true);
+													setShowAddDropdown(false);
+												}}
+												className="w-full px-4 py-3 text-left hover:bg-teal-50 flex items-center gap-3 transition-colors"
+											>
+												<svg
+													className="w-5 h-5 text-teal-500"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+													/>
+												</svg>
+												<span className="font-medium text-zinc-700">
+													Article
+												</span>
+											</button>
 											<div className="border-t border-zinc-100">
 												<button
 													onClick={() => {
@@ -1449,7 +1714,7 @@ function DashboardPageInner() {
 						{totalItems > 0 && (
 							<div className="flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-hide">
 								{/* Media Type Filter */}
-								{(userMovies.length > 0 || userPodcasts.length > 0) && (
+								{(userMovies.length > 0 || userPodcasts.length > 0 || userArticles.length > 0) && (
 									<div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
 										<label
 											htmlFor="media-type-filter"
@@ -1472,6 +1737,9 @@ function DashboardPageInner() {
 											</option>
 											<option value="podcasts">
 												Podcasts ({userPodcasts.length})
+											</option>
+											<option value="articles">
+												Articles ({userArticles.length})
 											</option>
 										</select>
 									</div>
@@ -1496,7 +1764,8 @@ function DashboardPageInner() {
 											const bookCount = booksByGenre[genre]?.length || 0;
 											const movieCount = moviesByGenre[genre]?.length || 0;
 											const podcastCount = podcastsByGenre[genre]?.length || 0;
-											const total = bookCount + movieCount + podcastCount;
+											const articleCount = articlesByGenre[genre]?.length || 0;
+											const total = bookCount + movieCount + podcastCount + articleCount;
 											return (
 												<option key={genre} value={genre}>
 													{genre} ({total})
@@ -1657,6 +1926,12 @@ function DashboardPageInner() {
 							>
 								Add a Podcast
 							</button>
+							<button
+								onClick={() => setShowAddArticleModal(true)}
+								className="px-4 py-2.5 sm:py-2 bg-teal-500 hover:bg-teal-600 text-white text-sm font-medium rounded-lg transition-colors"
+							>
+								Add an Article
+							</button>
 						</div>
 					</div>
 				) : (
@@ -1666,10 +1941,12 @@ function DashboardPageInner() {
 							const hasBooks = booksByGenre[genre]?.length > 0;
 							const hasMovies = moviesByGenre[genre]?.length > 0;
 							const hasPodcasts = podcastsByGenre[genre]?.length > 0;
+							const hasArticles = articlesByGenre[genre]?.length > 0;
 							if (mediaTypeFilter === 'books') return hasBooks;
 							if (mediaTypeFilter === 'movies') return hasMovies;
 							if (mediaTypeFilter === 'podcasts') return hasPodcasts;
-							return hasBooks || hasMovies || hasPodcasts;
+							if (mediaTypeFilter === 'articles') return hasArticles;
+							return hasBooks || hasMovies || hasPodcasts || hasArticles;
 						})
 						.map((genre) => {
 							const isCollapsed =
@@ -1677,6 +1954,7 @@ function DashboardPageInner() {
 							const genreBooks = booksByGenre[genre] || [];
 							const genreMovies = moviesByGenre[genre] || [];
 							const genrePodcasts = podcastsByGenre[genre] || [];
+							const genreArticles = articlesByGenre[genre] || [];
 
 							// Filter items based on media type
 							const showBooks =
@@ -1685,12 +1963,15 @@ function DashboardPageInner() {
 								mediaTypeFilter === 'all' || mediaTypeFilter === 'movies';
 							const showPodcasts =
 								mediaTypeFilter === 'all' || mediaTypeFilter === 'podcasts';
+							const showArticles =
+								mediaTypeFilter === 'all' || mediaTypeFilter === 'articles';
 
 							// Count for badge
 							const itemCount =
 								(showBooks ? genreBooks.length : 0) +
 								(showMovies ? genreMovies.length : 0) +
-								(showPodcasts ? genrePodcasts.length : 0);
+								(showPodcasts ? genrePodcasts.length : 0) +
+								(showArticles ? genreArticles.length : 0);
 
 							return (
 								<section key={genre} className="mb-6 sm:mb-8">
@@ -1740,6 +2021,8 @@ function DashboardPageInner() {
 															setSelectedUserMovieId(null);
 															setSelectedPodcast(null);
 															setSelectedUserPodcastId(null);
+															setSelectedArticle(null);
+															setSelectedUserArticleId(null);
 															selectBook(getBookWithDetails(ub), ub.id);
 														}}
 													/>
@@ -1755,6 +2038,8 @@ function DashboardPageInner() {
 															setSelectedUserBookId(null);
 															setSelectedPodcast(null);
 															setSelectedUserPodcastId(null);
+															setSelectedArticle(null);
+															setSelectedUserArticleId(null);
 															selectMovie(getMovieWithDetails(um), um.id);
 														}}
 													/>
@@ -1770,7 +2055,26 @@ function DashboardPageInner() {
 															setSelectedUserBookId(null);
 															setSelectedMovie(null);
 															setSelectedUserMovieId(null);
+															setSelectedArticle(null);
+															setSelectedUserArticleId(null);
 															selectPodcast(getPodcastWithDetails(up), up.id);
+														}}
+													/>
+												))}
+											{/* Render articles */}
+											{showArticles &&
+												genreArticles.map((ua) => (
+													<ArticleCard
+														key={`article-${ua.id}`}
+														article={getArticleWithDetails(ua)}
+														onClick={() => {
+															setSelectedBook(null);
+															setSelectedUserBookId(null);
+															setSelectedMovie(null);
+															setSelectedUserMovieId(null);
+															setSelectedPodcast(null);
+															setSelectedUserPodcastId(null);
+															selectArticle(getArticleWithDetails(ua), ua.id);
 														}}
 													/>
 												))}
@@ -1801,6 +2105,13 @@ function DashboardPageInner() {
 				<AddPodcastModal
 					onClose={() => setShowAddPodcastModal(false)}
 					onPodcastAdded={handlePodcastAdded}
+				/>
+			)}
+
+			{showAddArticleModal && (
+				<AddArticleModal
+					onClose={() => setShowAddArticleModal(false)}
+					onArticleAdded={handleArticleAdded}
 				/>
 			)}
 
@@ -1870,6 +2181,23 @@ function DashboardPageInner() {
 							}
 						: undefined
 				}
+			/>
+
+			{/* Article Details Sidebar */}
+			<ArticleDetailsSidebar
+				article={selectedArticle}
+				onClose={() => {
+					selectArticle(null, null);
+				}}
+				onRemove={
+					selectedUserArticleId
+						? async () => {
+								await handleRemoveArticle(selectedUserArticleId);
+								selectArticle(null, null);
+							}
+						: undefined
+				}
+				onUpdate={handleUpdateArticle}
 			/>
 
 			{/* Chat Sidebar */}

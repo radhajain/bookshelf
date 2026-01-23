@@ -27,6 +27,7 @@ export default function LoadingSpinner({
     amber: 'border-t-amber-500',
     blue: 'border-t-blue-500',
     purple: 'border-t-purple-500',
+    teal: 'border-t-teal-500',
     zinc: 'border-t-zinc-500',
     red: 'border-t-red-500',
     green: 'border-t-green-500',

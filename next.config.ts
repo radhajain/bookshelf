@@ -19,6 +19,18 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: '*.mzstatic.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'static01.nyt.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'substackcdn.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.ft.com',
+      },
     ],
   },
 };

@@ -232,3 +232,71 @@ export interface UpdatePodcastInput {
   creator?: string;
   genres?: string[];
 }
+
+// =============================================
+// Article Types
+// =============================================
+
+export interface DbArticle {
+  id: string;
+  title: string;
+  author: string | null;
+  publication: string | null;
+  publication_date: string | null;
+  article_url: string;
+  description: string | null;
+  thumbnail_image: string | null;
+  section: string | null;
+  reading_time_minutes: number | null;
+  word_count: number | null;
+  subjects: string[] | null;
+  details_fetched_at: string | null;
+  created_at: string;
+}
+
+export interface DbUserArticle {
+  id: string;
+  user_id: string;
+  article_id: string;
+  genre: string | null;
+  notes: string | null;
+  priority: string | null;
+  read: boolean;
+  read_at: string | null;
+  created_at: string;
+}
+
+// Joined type for fetching user's articles with article details
+export interface UserArticleWithDetails extends DbUserArticle {
+  article: DbArticle;
+}
+
+// Input types for creating/updating articles
+export interface CreateArticleInput {
+  title: string;
+  article_url: string;
+  author?: string;
+  publication?: string;
+}
+
+export interface CreateUserArticleInput {
+  article_id: string;
+  genre?: string;
+  notes?: string;
+  priority?: string;
+  read?: boolean;
+}
+
+export interface UpdateUserArticleInput {
+  genre?: string;
+  notes?: string;
+  priority?: string;
+  read?: boolean;
+  read_at?: string | null;
+}
+
+export interface UpdateArticleInput {
+  author?: string;
+  publication?: string;
+  section?: string;
+}

@@ -1,17 +1,17 @@
 // Shared content types for books, movies, and podcasts
 
-export type ContentType = 'book' | 'movie' | 'podcast';
+export type ContentType = 'book' | 'movie' | 'podcast' | 'article';
 
 // Configuration for each content type's visual appearance
 export interface ContentTypeConfig {
   type: ContentType;
   label: string;
   pluralLabel: string;
-  primaryColor: 'amber' | 'blue' | 'purple';
+  primaryColor: 'amber' | 'blue' | 'purple' | 'teal';
   bgGradient: string;
   badgeClass: string;
   creatorLabel: string;
-  icon: 'book' | 'film' | 'microphone';
+  icon: 'book' | 'film' | 'microphone' | 'newspaper';
 }
 
 export const CONTENT_CONFIGS: Record<ContentType, ContentTypeConfig> = {
@@ -44,6 +44,16 @@ export const CONTENT_CONFIGS: Record<ContentType, ContentTypeConfig> = {
     badgeClass: 'bg-purple-500',
     creatorLabel: 'by',
     icon: 'microphone',
+  },
+  article: {
+    type: 'article',
+    label: 'Article',
+    pluralLabel: 'Articles',
+    primaryColor: 'teal',
+    bgGradient: 'from-teal-100 to-teal-50',
+    badgeClass: 'bg-teal-500',
+    creatorLabel: 'by',
+    icon: 'newspaper',
   },
 };
 
@@ -114,6 +124,17 @@ export const colorClasses = {
     border: 'border-green-500',
     ring: 'ring-green-500',
     gradient: 'from-green-100 to-green-50',
+  },
+  teal: {
+    bg: 'bg-teal-500',
+    bgHover: 'hover:bg-teal-600',
+    bgLight: 'bg-teal-50',
+    bgLightHover: 'hover:bg-teal-100',
+    text: 'text-teal-500',
+    textDark: 'text-teal-700',
+    border: 'border-teal-500',
+    ring: 'ring-teal-500',
+    gradient: 'from-teal-100 to-teal-50',
   },
 } as const;
 
