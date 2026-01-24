@@ -222,6 +222,8 @@ function dbArticleToArticleWithDetails(
 		thumbnailImage: dbArticle.thumbnail_image || undefined,
 		section: dbArticle.section || undefined,
 		readingTimeMinutes: dbArticle.reading_time_minutes || undefined,
+		wordCount: dbArticle.word_count || undefined,
+		subjects: dbArticle.subjects || undefined,
 		detailsFetchedAt: dbArticle.details_fetched_at || undefined,
 	};
 }
@@ -1100,6 +1102,9 @@ function DashboardPageInner() {
 				description: ua.article.description || undefined,
 				thumbnailImage: ua.article.thumbnail_image || undefined,
 				section: ua.article.section || undefined,
+				readingTimeMinutes: ua.article.reading_time_minutes || undefined,
+				wordCount: ua.article.word_count || undefined,
+				subjects: ua.article.subjects || undefined,
 			};
 		},
 		[enrichedArticles],

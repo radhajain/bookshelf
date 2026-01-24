@@ -2,20 +2,23 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useAuth } from '@/app/components/auth/AuthProvider';
-import { DbBook, DbMovie, DbPodcast } from '@/app/lib/types/database';
+import { DbBook, DbMovie, DbPodcast, DbArticle } from '@/app/lib/types/database';
 import { BookWithDetails, RatingSource } from '@/app/lib/books';
 import { MovieWithDetails, MovieRatingSource } from '@/app/lib/movies';
 import { PodcastWithDetails, PodcastRatingSource } from '@/app/lib/podcasts';
+import { ArticleWithDetails } from '@/app/lib/articles';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import LoginModal from '@/app/components/auth/LoginModal';
 import BookDetailsSidebar from '@/app/components/BookDetailsSidebar';
 import MovieDetailsSidebar from '@/app/components/movies/MovieDetailsSidebar';
 import PodcastDetailsSidebar from '@/app/components/podcasts/PodcastDetailsSidebar';
+import ArticleDetailsSidebar from '@/app/components/articles/ArticleDetailsSidebar';
 import { SkeletonGrid } from '@/app/components/SkeletonCard';
 import BrowseBookCard from '@/app/components/BrowseBookCard';
 import BrowseMovieCard from '@/app/components/BrowseMovieCard';
 import BrowsePodcastCard from '@/app/components/BrowsePodcastCard';
+import BrowseArticleCard from '@/app/components/BrowseArticleCard';
 
 interface BookWithShelfStatus extends DbBook {
 	inMyShelf: boolean;
@@ -29,7 +32,11 @@ interface PodcastWithShelfStatus extends DbPodcast {
 	inMyShelf: boolean;
 }
 
-type MediaTypeFilter = 'all' | 'books' | 'movies' | 'podcasts';
+interface ArticleWithShelfStatus extends DbArticle {
+	inMyShelf: boolean;
+}
+
+type MediaTypeFilter = 'all' | 'books' | 'movies' | 'podcasts' | 'articles';
 
 // Convert DB book to BookWithDetails format for sidebar
 function dbBookToBookWithDetails(dbBook: DbBook): BookWithDetails {
@@ -164,6 +171,28 @@ function dbPodcastToPodcastWithDetails(
 	};
 }
 
+// Convert DB article to ArticleWithDetails format for sidebar
+function dbArticleToArticleWithDetails(
+	dbArticle: DbArticle,
+): ArticleWithDetails {
+	return {
+		id: dbArticle.id,
+		title: dbArticle.title,
+		author: dbArticle.author || undefined,
+		publication: dbArticle.publication || undefined,
+		publicationDate: dbArticle.publication_date || undefined,
+		articleUrl: dbArticle.article_url,
+		genre: 'Uncategorized',
+		description: dbArticle.description || undefined,
+		thumbnailImage: dbArticle.thumbnail_image || undefined,
+		section: dbArticle.section || undefined,
+		readingTimeMinutes: dbArticle.reading_time_minutes || undefined,
+		wordCount: dbArticle.word_count || undefined,
+		subjects: dbArticle.subjects || undefined,
+		detailsFetchedAt: dbArticle.details_fetched_at || undefined,
+	};
+}
+
 function BrowsePageInner() {
 	const searchParams = useSearchParams();
 	const router = useRouter();
@@ -171,9 +200,11 @@ function BrowsePageInner() {
 	const [books, setBooks] = useState<BookWithShelfStatus[]>([]);
 	const [movies, setMovies] = useState<MovieWithShelfStatus[]>([]);
 	const [podcasts, setPodcasts] = useState<PodcastWithShelfStatus[]>([]);
+	const [articles, setArticles] = useState<ArticleWithShelfStatus[]>([]);
 	const [bookGenres, setBookGenres] = useState<string[]>([]);
 	const [movieGenres, setMovieGenres] = useState<string[]>([]);
 	const [podcastGenres, setPodcastGenres] = useState<string[]>([]);
+	const [articlePublications, setArticlePublications] = useState<string[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [searchQuery, setSearchQuery] = useState('');
 	const [selectedGenre, setSelectedGenre] = useState('all');
@@ -182,6 +213,7 @@ function BrowsePageInner() {
 	const [addingBookId, setAddingBookId] = useState<string | null>(null);
 	const [addingMovieId, setAddingMovieId] = useState<string | null>(null);
 	const [addingPodcastId, setAddingPodcastId] = useState<string | null>(null);
+	const [addingArticleId, setAddingArticleId] = useState<string | null>(null);
 	const [showLoginModal, setShowLoginModal] = useState(false);
 
 	// Sidebar state
@@ -193,6 +225,8 @@ function BrowsePageInner() {
 	);
 	const [selectedPodcast, setSelectedPodcast] =
 		useState<PodcastWithDetails | null>(null);
+	const [selectedArticle, setSelectedArticle] =
+		useState<ArticleWithDetails | null>(null);
 
 	const fetchData = useCallback(async () => {
 		setLoading(true);
@@ -200,12 +234,13 @@ function BrowsePageInner() {
 		if (searchQuery) params.set('q', searchQuery);
 		if (selectedGenre !== 'all') params.set('genre', selectedGenre);
 
-		// Fetch books, movies, and podcasts in parallel
-		const [booksResponse, moviesResponse, podcastsResponse] = await Promise.all(
+		// Fetch books, movies, podcasts, and articles in parallel
+		const [booksResponse, moviesResponse, podcastsResponse, articlesResponse] = await Promise.all(
 			[
 				fetch(`/api/books?${params}`),
 				fetch(`/api/movies?${params}`),
 				fetch(`/api/podcasts?${params}`),
+				fetch(`/api/articles?${params}`),
 			],
 		);
 
@@ -223,6 +258,11 @@ function BrowsePageInner() {
 			const data = await podcastsResponse.json();
 			setPodcasts(data.podcasts || []);
 			setPodcastGenres(data.genres || []);
+		}
+		if (articlesResponse.ok) {
+			const data = await articlesResponse.json();
+			setArticles(data.articles || []);
+			setArticlePublications(data.publications || []);
 		}
 		setLoading(false);
 	}, [searchQuery, selectedGenre]);
@@ -318,6 +358,34 @@ function BrowsePageInner() {
 		}
 	};
 
+	const handleAddArticleToShelf = async (article: ArticleWithShelfStatus) => {
+		if (!user) return;
+
+		setAddingArticleId(article.id);
+		try {
+			const response = await fetch('/api/user-articles', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					articleId: article.id,
+				}),
+			});
+
+			if (response.ok) {
+				// Update local state to reflect the article is now in shelf
+				setArticles(
+					articles.map((a) =>
+						a.id === article.id ? { ...a, inMyShelf: true } : a,
+					),
+				);
+			}
+		} catch (error) {
+			console.error('Error adding article to shelf:', error);
+		} finally {
+			setAddingArticleId(null);
+		}
+	};
+
 	// Selection handlers with URL updates
 	const selectBook = useCallback(
 		(book: BookWithShelfStatus | null) => {
@@ -325,6 +393,7 @@ function BrowsePageInner() {
 				setSelectedBook(dbBookToBookWithDetails(book));
 				setSelectedMovie(null);
 				setSelectedPodcast(null);
+				setSelectedArticle(null);
 				router.push(`/browse?book=${book.id}`, { scroll: false });
 			} else {
 				setSelectedBook(null);
@@ -340,6 +409,7 @@ function BrowsePageInner() {
 				setSelectedMovie(dbMovieToMovieWithDetails(movie));
 				setSelectedBook(null);
 				setSelectedPodcast(null);
+				setSelectedArticle(null);
 				router.push(`/browse?movie=${movie.id}`, { scroll: false });
 			} else {
 				setSelectedMovie(null);
@@ -355,9 +425,26 @@ function BrowsePageInner() {
 				setSelectedPodcast(dbPodcastToPodcastWithDetails(podcast));
 				setSelectedBook(null);
 				setSelectedMovie(null);
+				setSelectedArticle(null);
 				router.push(`/browse?podcast=${podcast.id}`, { scroll: false });
 			} else {
 				setSelectedPodcast(null);
+				router.push('/browse', { scroll: false });
+			}
+		},
+		[router],
+	);
+
+	const selectArticle = useCallback(
+		(article: ArticleWithShelfStatus | null) => {
+			if (article) {
+				setSelectedArticle(dbArticleToArticleWithDetails(article));
+				setSelectedBook(null);
+				setSelectedMovie(null);
+				setSelectedPodcast(null);
+				router.push(`/browse?article=${article.id}`, { scroll: false });
+			} else {
+				setSelectedArticle(null);
 				router.push('/browse', { scroll: false });
 			}
 		},
@@ -371,6 +458,7 @@ function BrowsePageInner() {
 		const bookId = searchParams.get('book');
 		const movieId = searchParams.get('movie');
 		const podcastId = searchParams.get('podcast');
+		const articleId = searchParams.get('article');
 
 		if (bookId) {
 			const book = books.find((b) => b.id === bookId);
@@ -378,6 +466,7 @@ function BrowsePageInner() {
 				setSelectedBook(dbBookToBookWithDetails(book));
 				setSelectedMovie(null);
 				setSelectedPodcast(null);
+				setSelectedArticle(null);
 			}
 		} else if (movieId) {
 			const movie = movies.find((m) => m.id === movieId);
@@ -385,6 +474,7 @@ function BrowsePageInner() {
 				setSelectedMovie(dbMovieToMovieWithDetails(movie));
 				setSelectedBook(null);
 				setSelectedPodcast(null);
+				setSelectedArticle(null);
 			}
 		} else if (podcastId) {
 			const podcast = podcasts.find((p) => p.id === podcastId);
@@ -392,9 +482,18 @@ function BrowsePageInner() {
 				setSelectedPodcast(dbPodcastToPodcastWithDetails(podcast));
 				setSelectedBook(null);
 				setSelectedMovie(null);
+				setSelectedArticle(null);
+			}
+		} else if (articleId) {
+			const article = articles.find((a) => a.id === articleId);
+			if (article) {
+				setSelectedArticle(dbArticleToArticleWithDetails(article));
+				setSelectedBook(null);
+				setSelectedMovie(null);
+				setSelectedPodcast(null);
 			}
 		}
-	}, [searchParams, books, movies, podcasts, loading]);
+	}, [searchParams, books, movies, podcasts, articles, loading]);
 
 	// Refresh handlers for sidebars - fetch fresh details from API and update both sidebar and list
 	const handleRefreshBook = useCallback(
@@ -493,8 +592,10 @@ function BrowsePageInner() {
 		mediaTypeFilter === 'all' || mediaTypeFilter === 'movies' ? movies : [];
 	const filteredPodcasts =
 		mediaTypeFilter === 'all' || mediaTypeFilter === 'podcasts' ? podcasts : [];
+	const filteredArticles =
+		mediaTypeFilter === 'all' || mediaTypeFilter === 'articles' ? articles : [];
 	const totalItems =
-		filteredBooks.length + filteredMovies.length + filteredPodcasts.length;
+		filteredBooks.length + filteredMovies.length + filteredPodcasts.length + filteredArticles.length;
 
 	return (
 		<div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
@@ -567,7 +668,7 @@ function BrowsePageInner() {
 						</div>
 
 						{/* Media Type Filter */}
-						{(movies.length > 0 || podcasts.length > 0) && (
+						{(movies.length > 0 || podcasts.length > 0 || articles.length > 0) && (
 							<select
 								value={mediaTypeFilter}
 								onChange={(e) =>
@@ -576,11 +677,12 @@ function BrowsePageInner() {
 								className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-colors bg-white"
 							>
 								<option value="all">
-									All Types ({books.length + movies.length + podcasts.length})
+									All Types ({books.length + movies.length + podcasts.length + articles.length})
 								</option>
 								<option value="books">Books ({books.length})</option>
 								<option value="movies">Movies ({movies.length})</option>
 								<option value="podcasts">Podcasts ({podcasts.length})</option>
+								<option value="articles">Articles ({articles.length})</option>
 							</select>
 						)}
 
@@ -684,6 +786,20 @@ function BrowsePageInner() {
 								isLoggedIn={!!user}
 							/>
 						))}
+
+						{/* Render Articles */}
+						{filteredArticles.map((article) => (
+							<BrowseArticleCard
+								key={`article-${article.id}`}
+								article={article}
+								onClick={() => selectArticle(article)}
+								onAddToShelf={() => handleAddArticleToShelf(article)}
+								onShowLogin={() => setShowLoginModal(true)}
+								isAdding={addingArticleId === article.id}
+								isLoggedIn={!!user}
+								showTypeLabel={movies.length > 0 || podcasts.length > 0 || books.length > 0}
+							/>
+						))}
 					</div>
 				)}
 			</main>
@@ -736,6 +852,15 @@ function BrowsePageInner() {
 						? () => handleRefreshPodcast(selectedPodcast.id)
 						: undefined
 				}
+			/>
+
+			{/* Article Details Sidebar */}
+			<ArticleDetailsSidebar
+				article={selectedArticle}
+				onClose={() => {
+					setSelectedArticle(null);
+					router.push('/browse', { scroll: false });
+				}}
 			/>
 		</div>
 	);
