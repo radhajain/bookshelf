@@ -300,3 +300,97 @@ export interface UpdateArticleInput {
   publication?: string;
   section?: string;
 }
+
+// =============================================
+// TV Show Types
+// =============================================
+
+export interface DbTVShow {
+  id: string;
+  title: string;
+  creator: string | null;
+  first_air_date: string | null;
+  last_air_date: string | null;
+  number_of_seasons: number | null;
+  number_of_episodes: number | null;
+  episode_run_time: number[] | null;
+  poster_image: string | null;
+  backdrop_image: string | null;
+  description: string | null;
+  tagline: string | null;
+  status: string | null;
+  in_production: boolean;
+  // External IDs
+  tmdb_id: number | null;
+  imdb_id: string | null;
+  // Cached rating data from APIs
+  tmdb_rating: number | null;
+  tmdb_ratings_count: number | null;
+  imdb_rating: number | null;
+  imdb_ratings_count: number | null;
+  // Additional metadata
+  cast_members: string[] | null;
+  genres: string[] | null;
+  networks: string[] | null;
+  production_companies: string[] | null;
+  origin_country: string[] | null;
+  original_language: string | null;
+  // Links
+  imdb_url: string | null;
+  // Caching and tracking
+  details_fetched_at: string | null;
+  created_at: string;
+}
+
+export interface DbUserTVShow {
+  id: string;
+  user_id: string;
+  tvshow_id: string;
+  genre: string | null;
+  notes: string | null;
+  priority: string | null;
+  watching_status: 'want_to_watch' | 'watching' | 'watched' | 'dropped';
+  current_season: number | null;
+  current_episode: number | null;
+  rating: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}
+
+// Joined type for fetching user's TV shows with TV show details
+export interface UserTVShowWithDetails extends DbUserTVShow {
+  tvshow: DbTVShow;
+}
+
+// Input types for creating/updating TV shows
+export interface CreateTVShowInput {
+  title: string;
+  creator?: string;
+  first_air_date?: string;
+}
+
+export interface CreateUserTVShowInput {
+  tvshow_id: string;
+  genre?: string;
+  notes?: string;
+  priority?: string;
+  watching_status?: string;
+}
+
+export interface UpdateUserTVShowInput {
+  genre?: string;
+  notes?: string;
+  priority?: string;
+  watching_status?: string;
+  current_season?: number;
+  current_episode?: number;
+  rating?: number;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+export interface UpdateTVShowInput {
+  creator?: string;
+  genres?: string[];
+}

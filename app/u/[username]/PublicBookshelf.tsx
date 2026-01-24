@@ -4,12 +4,14 @@ import { useState } from 'react';
 import { BookWithDetails } from '@/app/lib/books';
 import { MovieWithDetails } from '@/app/lib/movies';
 import { PodcastWithDetails } from '@/app/lib/podcasts';
+import { TVShowWithDetails } from '@/app/lib/tvshows';
 import BookCard from '@/app/components/BookCard';
 import BookDetailsSidebar from '@/app/components/BookDetailsSidebar';
 import MovieCard from '@/app/components/movies/MovieCard';
 import MovieDetailsSidebar from '@/app/components/movies/MovieDetailsSidebar';
 import PodcastCard from '@/app/components/PodcastCard';
 import PodcastDetailsSidebar from '@/app/components/podcasts/PodcastDetailsSidebar';
+import { TVShowCard, TVShowDetailsSidebar } from '@/app/components/tvshows';
 import Link from 'next/link';
 
 interface Profile {
@@ -18,16 +20,18 @@ interface Profile {
   display_name: string | null;
 }
 
-type MediaTypeFilter = 'all' | 'books' | 'movies' | 'podcasts';
+type MediaTypeFilter = 'all' | 'books' | 'movies' | 'podcasts' | 'tvshows';
 
 interface PublicBookshelfProps {
   profile: Profile;
   books: BookWithDetails[];
   movies: MovieWithDetails[];
   podcasts: PodcastWithDetails[];
+  tvshows: TVShowWithDetails[];
   booksByGenre: Record<string, BookWithDetails[]>;
   moviesByGenre: Record<string, MovieWithDetails[]>;
   podcastsByGenre: Record<string, PodcastWithDetails[]>;
+  tvshowsByGenre: Record<string, TVShowWithDetails[]>;
   sortedGenres: string[];
 }
 
@@ -36,14 +40,17 @@ export default function PublicBookshelf({
   books,
   movies,
   podcasts,
+  tvshows,
   booksByGenre,
   moviesByGenre,
   podcastsByGenre,
+  tvshowsByGenre,
   sortedGenres,
 }: PublicBookshelfProps) {
   const [selectedBook, setSelectedBook] = useState<BookWithDetails | null>(null);
   const [selectedMovie, setSelectedMovie] = useState<MovieWithDetails | null>(null);
   const [selectedPodcast, setSelectedPodcast] = useState<PodcastWithDetails | null>(null);
+  const [selectedTVShow, setSelectedTVShow] = useState<TVShowWithDetails | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>('all');
 
@@ -54,13 +61,15 @@ export default function PublicBookshelf({
     const hasBooks = booksByGenre[genre]?.length > 0;
     const hasMovies = moviesByGenre[genre]?.length > 0;
     const hasPodcasts = podcastsByGenre[genre]?.length > 0;
+    const hasTVShows = tvshowsByGenre[genre]?.length > 0;
     if (mediaTypeFilter === 'books') return hasBooks;
     if (mediaTypeFilter === 'movies') return hasMovies;
     if (mediaTypeFilter === 'podcasts') return hasPodcasts;
-    return hasBooks || hasMovies || hasPodcasts;
+    if (mediaTypeFilter === 'tvshows') return hasTVShows;
+    return hasBooks || hasMovies || hasPodcasts || hasTVShows;
   });
 
-  const totalItems = books.length + movies.length + podcasts.length;
+  const totalItems = books.length + movies.length + podcasts.length + tvshows.length;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
@@ -76,6 +85,9 @@ export default function PublicBookshelf({
                 {books.length} {books.length === 1 ? 'book' : 'books'}
                 {movies.length > 0 && (
                   <>, {movies.length} {movies.length === 1 ? 'movie' : 'movies'}</>
+                )}
+                {tvshows.length > 0 && (
+                  <>, {tvshows.length} {tvshows.length === 1 ? 'TV show' : 'TV shows'}</>
                 )}
                 {podcasts.length > 0 && (
                   <>, {podcasts.length} {podcasts.length === 1 ? 'podcast' : 'podcasts'}</>
@@ -101,7 +113,7 @@ export default function PublicBookshelf({
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex flex-col gap-3">
             {/* Media Type Filter */}
-            {(movies.length > 0 || podcasts.length > 0) && (
+            {(movies.length > 0 || podcasts.length > 0 || tvshows.length > 0) && (
               <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => setMediaTypeFilter('all')}
@@ -134,6 +146,16 @@ export default function PublicBookshelf({
                   Movies ({movies.length})
                 </button>
                 <button
+                  onClick={() => setMediaTypeFilter('tvshows')}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                    mediaTypeFilter === 'tvshows'
+                      ? 'bg-green-500 text-white'
+                      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                  }`}
+                >
+                  TV Shows ({tvshows.length})
+                </button>
+                <button
                   onClick={() => setMediaTypeFilter('podcasts')}
                   className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                     mediaTypeFilter === 'podcasts'
@@ -162,10 +184,12 @@ export default function PublicBookshelf({
                 const bookCount = booksByGenre[genre]?.length || 0;
                 const movieCount = moviesByGenre[genre]?.length || 0;
                 const podcastCount = podcastsByGenre[genre]?.length || 0;
+                const tvshowCount = tvshowsByGenre[genre]?.length || 0;
                 const itemCount =
                   (mediaTypeFilter === 'all' || mediaTypeFilter === 'books' ? bookCount : 0) +
                   (mediaTypeFilter === 'all' || mediaTypeFilter === 'movies' ? movieCount : 0) +
-                  (mediaTypeFilter === 'all' || mediaTypeFilter === 'podcasts' ? podcastCount : 0);
+                  (mediaTypeFilter === 'all' || mediaTypeFilter === 'podcasts' ? podcastCount : 0) +
+                  (mediaTypeFilter === 'all' || mediaTypeFilter === 'tvshows' ? tvshowCount : 0);
 
                 // Hide genres with no items based on filter
                 if (itemCount === 0) return null;
@@ -204,13 +228,16 @@ export default function PublicBookshelf({
             const genreBooks = booksByGenre[genre] || [];
             const genreMovies = moviesByGenre[genre] || [];
             const genrePodcasts = podcastsByGenre[genre] || [];
+            const genreTVShows = tvshowsByGenre[genre] || [];
             const showBooks = mediaTypeFilter === 'all' || mediaTypeFilter === 'books';
             const showMovies = mediaTypeFilter === 'all' || mediaTypeFilter === 'movies';
             const showPodcasts = mediaTypeFilter === 'all' || mediaTypeFilter === 'podcasts';
+            const showTVShows = mediaTypeFilter === 'all' || mediaTypeFilter === 'tvshows';
             const itemCount =
               (showBooks ? genreBooks.length : 0) +
               (showMovies ? genreMovies.length : 0) +
-              (showPodcasts ? genrePodcasts.length : 0);
+              (showPodcasts ? genrePodcasts.length : 0) +
+              (showTVShows ? genreTVShows.length : 0);
 
             if (itemCount === 0) return null;
 
@@ -231,6 +258,7 @@ export default function PublicBookshelf({
                       onClick={() => {
                         setSelectedMovie(null);
                         setSelectedPodcast(null);
+                        setSelectedTVShow(null);
                         setSelectedBook(book);
                       }}
                     />
@@ -243,7 +271,21 @@ export default function PublicBookshelf({
                       onClick={() => {
                         setSelectedBook(null);
                         setSelectedPodcast(null);
+                        setSelectedTVShow(null);
                         setSelectedMovie(movie);
+                      }}
+                    />
+                  ))}
+                  {/* Render TV shows */}
+                  {showTVShows && genreTVShows.map((tvshow) => (
+                    <TVShowCard
+                      key={`tvshow-${tvshow.id}`}
+                      tvshow={tvshow}
+                      onClick={() => {
+                        setSelectedBook(null);
+                        setSelectedMovie(null);
+                        setSelectedPodcast(null);
+                        setSelectedTVShow(tvshow);
                       }}
                     />
                   ))}
@@ -255,6 +297,7 @@ export default function PublicBookshelf({
                       onClick={() => {
                         setSelectedBook(null);
                         setSelectedMovie(null);
+                        setSelectedTVShow(null);
                         setSelectedPodcast(podcast);
                       }}
                     />
@@ -269,7 +312,7 @@ export default function PublicBookshelf({
       {/* Footer */}
       <footer className="border-t border-zinc-200 bg-white py-6">
         <div className="max-w-7xl mx-auto px-4 text-center text-sm text-zinc-500">
-          <p>Book data from Google Books & Open Library. Movie data from TMDB & OMDB. Podcast data from iTunes.</p>
+          <p>Book data from Google Books & Open Library. Movie & TV show data from TMDB. Podcast data from iTunes.</p>
           <p className="text-xs mt-1">
             <Link href="/" className="text-amber-600 hover:underline">
               Create your own shelf
@@ -294,6 +337,12 @@ export default function PublicBookshelf({
       <PodcastDetailsSidebar
         podcast={selectedPodcast}
         onClose={() => setSelectedPodcast(null)}
+      />
+
+      {/* TV Show Details Sidebar */}
+      <TVShowDetailsSidebar
+        tvshow={selectedTVShow}
+        onClose={() => setSelectedTVShow(null)}
       />
     </div>
   );

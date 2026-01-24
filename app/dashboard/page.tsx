@@ -12,11 +12,14 @@ import {
 	DbPodcast,
 	UserArticleWithDetails,
 	DbArticle,
+	UserTVShowWithDetails,
+	DbTVShow,
 } from '@/app/lib/types/database';
 import { BookWithDetails, RatingSource } from '@/app/lib/books';
 import { MovieWithDetails, MovieRatingSource } from '@/app/lib/movies';
 import { PodcastWithDetails, PodcastRatingSource } from '@/app/lib/podcasts';
 import { ArticleWithDetails } from '@/app/lib/articles';
+import { TVShowWithDetails, TVShowRatingSource, WatchingStatus } from '@/app/lib/tvshows';
 import { RateLimitError } from '@/app/lib/bookApi';
 import BookCard from '@/app/components/BookCard';
 import BookDetailsSidebar from '@/app/components/BookDetailsSidebar';
@@ -26,6 +29,7 @@ import PodcastCard from '@/app/components/PodcastCard';
 import PodcastDetailsSidebar from '@/app/components/podcasts/PodcastDetailsSidebar';
 import ArticleCard from '@/app/components/ArticleCard';
 import { AddArticleModal, ArticleDetailsSidebar } from '@/app/components/articles';
+import { TVShowCard, AddTVShowModal, TVShowDetailsSidebar } from '@/app/components/tvshows';
 import AddBookModal from '@/app/components/books/AddBookModal';
 import AddMovieModal from '@/app/components/movies/AddMovieModal';
 import AddPodcastModal from '@/app/components/podcasts/AddPodcastModal';
@@ -37,7 +41,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 // Media type filter
-type MediaTypeFilter = 'all' | 'books' | 'movies' | 'podcasts' | 'articles';
+type MediaTypeFilter = 'all' | 'books' | 'movies' | 'podcasts' | 'articles' | 'tvshows';
 
 // Convert DB book to BookWithDetails format
 function dbBookToBookWithDetails(
@@ -228,6 +232,68 @@ function dbArticleToArticleWithDetails(
 	};
 }
 
+// Convert DB TV show to TVShowWithDetails format
+function dbTVShowToTVShowWithDetails(
+	dbTVShow: DbTVShow,
+	userTVShow?: UserTVShowWithDetails,
+): TVShowWithDetails {
+	const ratings: TVShowRatingSource[] = [];
+
+	if (dbTVShow.tmdb_rating) {
+		ratings.push({
+			source: 'TMDB',
+			rating: dbTVShow.tmdb_rating,
+			ratingsCount: dbTVShow.tmdb_ratings_count || undefined,
+			displayFormat: 'stars',
+		});
+	}
+
+	if (dbTVShow.imdb_rating) {
+		ratings.push({
+			source: 'IMDb',
+			rating: dbTVShow.imdb_rating,
+			ratingsCount: dbTVShow.imdb_ratings_count || undefined,
+			url: dbTVShow.imdb_url || undefined,
+			displayFormat: 'stars',
+		});
+	}
+
+	return {
+		id: dbTVShow.id,
+		title: dbTVShow.title,
+		creator: dbTVShow.creator || undefined,
+		firstAirDate: dbTVShow.first_air_date || undefined,
+		genre: userTVShow?.genre || dbTVShow.genres?.[0] || 'Uncategorized',
+		notes: userTVShow?.notes || undefined,
+		priority: userTVShow?.priority || undefined,
+		watchingStatus: userTVShow?.watching_status || 'want_to_watch',
+		currentSeason: userTVShow?.current_season || undefined,
+		currentEpisode: userTVShow?.current_episode || undefined,
+		rating: userTVShow?.rating || undefined,
+		description: dbTVShow.description || undefined,
+		tagline: dbTVShow.tagline || undefined,
+		posterImage: dbTVShow.poster_image || undefined,
+		backdropImage: dbTVShow.backdrop_image || undefined,
+		cast: dbTVShow.cast_members || undefined,
+		genres: dbTVShow.genres || undefined,
+		networks: dbTVShow.networks || undefined,
+		numberOfSeasons: dbTVShow.number_of_seasons || undefined,
+		numberOfEpisodes: dbTVShow.number_of_episodes || undefined,
+		episodeRunTime: dbTVShow.episode_run_time || undefined,
+		status: dbTVShow.status || undefined,
+		inProduction: dbTVShow.in_production || false,
+		tmdbId: dbTVShow.tmdb_id || undefined,
+		imdbId: dbTVShow.imdb_id || undefined,
+		lastAirDate: dbTVShow.last_air_date || undefined,
+		productionCompanies: dbTVShow.production_companies || undefined,
+		originCountry: dbTVShow.origin_country || undefined,
+		originalLanguage: dbTVShow.original_language || undefined,
+		imdbUrl: dbTVShow.imdb_url || undefined,
+		ratings,
+		detailsFetchedAt: dbTVShow.details_fetched_at || undefined,
+	};
+}
+
 function DashboardPageInner() {
 	const searchParams = useSearchParams();
 	const router = useRouter();
@@ -248,6 +314,7 @@ function DashboardPageInner() {
 	const [userArticles, setUserArticles] = useState<UserArticleWithDetails[]>(
 		[],
 	);
+	const [userTVShows, setUserTVShows] = useState<UserTVShowWithDetails[]>([]);
 	const [enrichedBooks, setEnrichedBooks] = useState<
 		Map<string, BookWithDetails>
 	>(new Map());
@@ -259,6 +326,9 @@ function DashboardPageInner() {
 	>(new Map());
 	const [enrichedArticles, setEnrichedArticles] = useState<
 		Map<string, ArticleWithDetails>
+	>(new Map());
+	const [enrichedTVShows, setEnrichedTVShows] = useState<
+		Map<string, TVShowWithDetails>
 	>(new Map());
 	const [loading, setLoading] = useState(true);
 	const [loadingProgress, setLoadingProgress] = useState({
@@ -287,10 +357,17 @@ function DashboardPageInner() {
 	const [selectedUserArticleId, setSelectedUserArticleId] = useState<
 		string | null
 	>(null);
+	const [selectedTVShow, setSelectedTVShow] = useState<TVShowWithDetails | null>(
+		null,
+	);
+	const [selectedUserTVShowId, setSelectedUserTVShowId] = useState<
+		string | null
+	>(null);
 	const [showAddModal, setShowAddModal] = useState(false);
 	const [showAddMovieModal, setShowAddMovieModal] = useState(false);
 	const [showAddPodcastModal, setShowAddPodcastModal] = useState(false);
 	const [showAddArticleModal, setShowAddArticleModal] = useState(false);
+	const [showAddTVShowModal, setShowAddTVShowModal] = useState(false);
 	const [showCSVModal, setShowCSVModal] = useState(false);
 	const [showAddDropdown, setShowAddDropdown] = useState(false);
 	const [showChat, setShowChat] = useState(false);
@@ -484,6 +561,37 @@ function DashboardPageInner() {
 		[],
 	);
 
+	const enrichTVShows = useCallback(
+		async (tvshows: UserTVShowWithDetails[]) => {
+			const enriched = new Map<string, TVShowWithDetails>();
+
+			for (const ut of tvshows) {
+				// Check if TV show already has cached details
+				if (ut.tvshow.details_fetched_at) {
+					// Use cached data from database
+					enriched.set(ut.tvshow_id, dbTVShowToTVShowWithDetails(ut.tvshow, ut));
+					setEnrichedTVShows(new Map(enriched));
+				} else if (!enriched.has(ut.tvshow_id)) {
+					// Fetch and cache details via API
+					try {
+						const response = await fetch(`/api/tvshows/${ut.tvshow_id}/details`);
+						if (response.ok) {
+							const { tvshow: updatedTVShow } = await response.json();
+							enriched.set(
+								ut.tvshow_id,
+								dbTVShowToTVShowWithDetails(updatedTVShow, ut),
+							);
+							setEnrichedTVShows(new Map(enriched));
+						}
+					} catch (error) {
+						console.error('Error fetching TV show details:', error);
+					}
+				}
+			}
+		},
+		[],
+	);
+
 	useEffect(() => {
 		if (!user) return;
 
@@ -492,8 +600,8 @@ function DashboardPageInner() {
 		const fetchData = async () => {
 			setLoading(true);
 
-			// Fetch books, movies, podcasts, and articles in parallel
-			const [booksResult, moviesResult, podcastsResult, articlesResult] = await Promise.all([
+			// Fetch books, movies, podcasts, articles, and TV shows in parallel
+			const [booksResult, moviesResult, podcastsResult, articlesResult, tvshowsResult] = await Promise.all([
 				supabase
 					.from('user_books')
 					.select(
@@ -534,6 +642,16 @@ function DashboardPageInner() {
 					)
 					.eq('user_id', user.id)
 					.order('created_at', { ascending: false }),
+				supabase
+					.from('user_tvshows')
+					.select(
+						`
+						*,
+						tvshow:tvshows(*)
+					`,
+					)
+					.eq('user_id', user.id)
+					.order('created_at', { ascending: false }),
 			]);
 
 			if (!cancelled) {
@@ -557,6 +675,11 @@ function DashboardPageInner() {
 					// Enrich articles in background
 					enrichArticles(articlesResult.data as UserArticleWithDetails[]);
 				}
+				if (!tvshowsResult.error && tvshowsResult.data) {
+					setUserTVShows(tvshowsResult.data as UserTVShowWithDetails[]);
+					// Enrich TV shows in background
+					enrichTVShows(tvshowsResult.data as UserTVShowWithDetails[]);
+				}
 				setLoading(false);
 			}
 		};
@@ -566,7 +689,7 @@ function DashboardPageInner() {
 		return () => {
 			cancelled = true;
 		};
-	}, [user, supabase, enrichBooks, enrichMovies, enrichPodcasts, enrichArticles]);
+	}, [user, supabase, enrichBooks, enrichMovies, enrichPodcasts, enrichArticles, enrichTVShows]);
 
 	// Update URL when selecting/deselecting a book
 	const selectBook = useCallback(
@@ -625,6 +748,22 @@ function DashboardPageInner() {
 			// Update URL without full page reload
 			if (article) {
 				router.push(`/dashboard?article=${article.id}`, { scroll: false });
+			} else {
+				router.push('/dashboard', { scroll: false });
+			}
+		},
+		[router],
+	);
+
+	// Update URL when selecting/deselecting a TV show
+	const selectTVShow = useCallback(
+		(tvshow: TVShowWithDetails | null, userTVShowId: string | null) => {
+			setSelectedTVShow(tvshow);
+			setSelectedUserTVShowId(userTVShowId);
+
+			// Update URL without full page reload
+			if (tvshow) {
+				router.push(`/dashboard?tvshow=${tvshow.id}`, { scroll: false });
 			} else {
 				router.push('/dashboard', { scroll: false });
 			}
@@ -745,6 +884,25 @@ function DashboardPageInner() {
 		}
 	}, [user, supabase, enrichArticles]);
 
+	const reloadTVShows = useCallback(async () => {
+		if (!user) return;
+		const { data, error } = await supabase
+			.from('user_tvshows')
+			.select(
+				`
+				*,
+				tvshow:tvshows(*)
+			`,
+			)
+			.eq('user_id', user.id)
+			.order('created_at', { ascending: false });
+
+		if (!error && data) {
+			setUserTVShows(data as UserTVShowWithDetails[]);
+			enrichTVShows(data as UserTVShowWithDetails[]);
+		}
+	}, [user, supabase, enrichTVShows]);
+
 	const handleBookAdded = useCallback(() => {
 		void reloadBooks();
 		setShowAddModal(false);
@@ -765,6 +923,11 @@ function DashboardPageInner() {
 		void reloadArticles();
 		setShowAddArticleModal(false);
 	}, [reloadArticles]);
+
+	const handleTVShowAdded = useCallback(() => {
+		void reloadTVShows();
+		setShowAddTVShowModal(false);
+	}, [reloadTVShows]);
 
 	const handleRemoveBook = async (userBookId: string) => {
 		const { error } = await supabase
@@ -814,6 +977,18 @@ function DashboardPageInner() {
 		}
 	};
 
+	const handleRemoveTVShow = async (userTVShowId: string) => {
+		const { error } = await supabase
+			.from('user_tvshows')
+			.delete()
+			.eq('id', userTVShowId);
+
+		if (!error) {
+			setUserTVShows(userTVShows.filter((ut) => ut.id !== userTVShowId));
+			setSelectedTVShow(null);
+		}
+	};
+
 	const handleUpdateArticle = useCallback(
 		async (updates: Partial<ArticleWithDetails>) => {
 			if (!selectedUserArticleId) return;
@@ -850,6 +1025,109 @@ function DashboardPageInner() {
 			}
 		},
 		[selectedUserArticleId, selectedArticle],
+	);
+
+	const handleRefreshTVShow = useCallback(
+		async (tvshowId: string) => {
+			try {
+				const response = await fetch(`/api/tvshows/${tvshowId}/details`, {
+					method: 'POST',
+				});
+				if (response.ok) {
+					const { tvshow: updatedTVShow } = await response.json();
+					const userTVShow = userTVShows.find((ut) => ut.tvshow_id === tvshowId);
+					const tvshowWithDetails = dbTVShowToTVShowWithDetails(
+						updatedTVShow,
+						userTVShow,
+					);
+
+					setEnrichedTVShows((prev) => {
+						const next = new Map(prev);
+						next.set(tvshowId, tvshowWithDetails);
+						return next;
+					});
+
+					// Update selected TV show if it's the one being refreshed
+					if (selectedTVShow?.id === tvshowId) {
+						setSelectedTVShow(tvshowWithDetails);
+					}
+
+					return tvshowWithDetails;
+				}
+			} catch (error) {
+				console.error('Error refreshing TV show details:', error);
+			}
+			return null;
+		},
+		[userTVShows, selectedTVShow],
+	);
+
+	const handleUpdateWatchingStatus = useCallback(
+		async (status: WatchingStatus) => {
+			if (!selectedUserTVShowId) return;
+			try {
+				const response = await fetch(
+					`/api/user-tvshows?id=${selectedUserTVShowId}`,
+					{
+						method: 'PATCH',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							watching_status: status,
+							finished_at: status === 'watched' ? new Date().toISOString() : null,
+						}),
+					},
+				);
+				if (response.ok) {
+					// Update local state
+					setUserTVShows((prev) =>
+						prev.map((ut) =>
+							ut.id === selectedUserTVShowId ? { ...ut, watching_status: status } : ut,
+						),
+					);
+					if (selectedTVShow) {
+						setSelectedTVShow({ ...selectedTVShow, watchingStatus: status });
+					}
+				}
+			} catch (error) {
+				console.error('Error updating watching status:', error);
+			}
+		},
+		[selectedUserTVShowId, selectedTVShow],
+	);
+
+	const handleUpdateProgress = useCallback(
+		async (season: number | null, episode: number | null) => {
+			if (!selectedUserTVShowId) return;
+			try {
+				const response = await fetch(
+					`/api/user-tvshows?id=${selectedUserTVShowId}`,
+					{
+						method: 'PATCH',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							current_season: season,
+							current_episode: episode,
+						}),
+					},
+				);
+				if (response.ok) {
+					// Update local state
+					setUserTVShows((prev) =>
+						prev.map((ut) =>
+							ut.id === selectedUserTVShowId
+								? { ...ut, current_season: season, current_episode: episode }
+								: ut,
+						),
+					);
+					if (selectedTVShow) {
+						setSelectedTVShow({ ...selectedTVShow, currentSeason: season ?? undefined, currentEpisode: episode ?? undefined });
+					}
+				}
+			} catch (error) {
+				console.error('Error updating progress:', error);
+			}
+		},
+		[selectedUserTVShowId, selectedTVShow],
 	);
 
 	const handleRefreshPodcast = useCallback(
@@ -1110,6 +1388,42 @@ function DashboardPageInner() {
 		[enrichedArticles],
 	);
 
+	// Convert UserTVShow to TVShowWithDetails for display
+	const getTVShowWithDetails = useCallback(
+		(ut: UserTVShowWithDetails): TVShowWithDetails => {
+			const enriched = enrichedTVShows.get(ut.tvshow_id);
+			if (enriched) {
+				return {
+					...enriched,
+					notes: ut.notes || undefined,
+					priority: ut.priority || undefined,
+					watchingStatus: ut.watching_status || 'want_to_watch',
+					currentSeason: ut.current_season || undefined,
+					currentEpisode: ut.current_episode || undefined,
+					rating: ut.rating || undefined,
+				};
+			}
+			return {
+				id: ut.tvshow_id,
+				title: ut.tvshow.title,
+				creator: ut.tvshow.creator || undefined,
+				firstAirDate: ut.tvshow.first_air_date || undefined,
+				genre: ut.genre || ut.tvshow.genres?.[0] || 'Uncategorized',
+				notes: ut.notes || undefined,
+				priority: ut.priority || undefined,
+				watchingStatus: ut.watching_status || 'want_to_watch',
+				currentSeason: ut.current_season || undefined,
+				currentEpisode: ut.current_episode || undefined,
+				rating: ut.rating || undefined,
+				description: ut.tvshow.description || undefined,
+				posterImage: ut.tvshow.poster_image || undefined,
+				numberOfSeasons: ut.tvshow.number_of_seasons || undefined,
+				ratings: [],
+			};
+		},
+		[enrichedTVShows],
+	);
+
 	// Handle deep linking - open book from URL param
 	useEffect(() => {
 		const bookId = searchParams.get('book');
@@ -1162,6 +1476,20 @@ function DashboardPageInner() {
 		}
 	}, [searchParams, userArticles, loading, getArticleWithDetails]);
 
+	// Handle deep linking - open TV show from URL param
+	useEffect(() => {
+		const tvshowId = searchParams.get('tvshow');
+		if (tvshowId && userTVShows.length > 0 && !loading) {
+			const userTVShow = userTVShows.find(
+				(ut) => ut.tvshow_id === tvshowId,
+			);
+			if (userTVShow) {
+				setSelectedTVShow(getTVShowWithDetails(userTVShow));
+				setSelectedUserTVShowId(userTVShow.id);
+			}
+		}
+	}, [searchParams, userTVShows, loading, getTVShowWithDetails]);
+
 	// Filter books and movies by search query
 	const filteredUserBooks = searchQuery
 		? userBooks.filter((ub) => {
@@ -1209,6 +1537,18 @@ function DashboardPageInner() {
 			})
 		: userArticles;
 
+	const filteredUserTVShows = searchQuery
+		? userTVShows.filter((ut) => {
+				const query = searchQuery.toLowerCase();
+				return (
+					ut.tvshow.title.toLowerCase().includes(query) ||
+					ut.tvshow.creator?.toLowerCase().includes(query) ||
+					ut.notes?.toLowerCase().includes(query) ||
+					ut.tvshow.cast_members?.some((c) => c.toLowerCase().includes(query))
+				);
+			})
+		: userTVShows;
+
 	// Group books by genre (genre is now on the book, not user_books)
 	const booksByGenre = filteredUserBooks.reduce(
 		(acc, ub) => {
@@ -1253,12 +1593,24 @@ function DashboardPageInner() {
 		{} as Record<string, UserArticleWithDetails[]>,
 	);
 
-	// Combined genres (union of book, movie, podcast, and article genres)
+	// Group TV shows by genre
+	const tvshowsByGenre = filteredUserTVShows.reduce(
+		(acc, ut) => {
+			const genre = ut.genre || ut.tvshow.genres?.[0] || 'Uncategorized';
+			if (!acc[genre]) acc[genre] = [];
+			acc[genre].push(ut);
+			return acc;
+		},
+		{} as Record<string, UserTVShowWithDetails[]>,
+	);
+
+	// Combined genres (union of book, movie, podcast, article, and TV show genres)
 	const allGenres = new Set([
 		...Object.keys(booksByGenre),
 		...Object.keys(moviesByGenre),
 		...Object.keys(podcastsByGenre),
 		...Object.keys(articlesByGenre),
+		...Object.keys(tvshowsByGenre),
 	]);
 
 	const sortedGenres = Array.from(allGenres).sort((a, b) => {
@@ -1268,7 +1620,7 @@ function DashboardPageInner() {
 	});
 
 	// Total item count
-	const totalItems = userBooks.length + userMovies.length + userPodcasts.length + userArticles.length;
+	const totalItems = userBooks.length + userMovies.length + userPodcasts.length + userArticles.length + userTVShows.length;
 
 	return (
 		<div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
@@ -1301,6 +1653,12 @@ function DashboardPageInner() {
 											<>
 												, {userArticles.length}{' '}
 												{userArticles.length === 1 ? 'article' : 'articles'}
+											</>
+										)}
+										{userTVShows.length > 0 && (
+											<>
+												, {userTVShows.length}{' '}
+												{userTVShows.length === 1 ? 'TV show' : 'TV shows'}
 											</>
 										)}
 										{profile?.username && (
@@ -1635,6 +1993,30 @@ function DashboardPageInner() {
 													Article
 												</span>
 											</button>
+											<button
+												onClick={() => {
+													setShowAddTVShowModal(true);
+													setShowAddDropdown(false);
+												}}
+												className="w-full px-4 py-3 text-left hover:bg-green-50 flex items-center gap-3 transition-colors"
+											>
+												<svg
+													className="w-5 h-5 text-green-500"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+													/>
+												</svg>
+												<span className="font-medium text-zinc-700">
+													TV Show
+												</span>
+											</button>
 											<div className="border-t border-zinc-100">
 												<button
 													onClick={() => {
@@ -1719,7 +2101,7 @@ function DashboardPageInner() {
 						{totalItems > 0 && (
 							<div className="flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-hide">
 								{/* Media Type Filter */}
-								{(userMovies.length > 0 || userPodcasts.length > 0 || userArticles.length > 0) && (
+								{(userMovies.length > 0 || userPodcasts.length > 0 || userArticles.length > 0 || userTVShows.length > 0) && (
 									<div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
 										<label
 											htmlFor="media-type-filter"
@@ -1746,6 +2128,9 @@ function DashboardPageInner() {
 											<option value="articles">
 												Articles ({userArticles.length})
 											</option>
+											<option value="tvshows">
+												TV Shows ({userTVShows.length})
+											</option>
 										</select>
 									</div>
 								)}
@@ -1770,7 +2155,8 @@ function DashboardPageInner() {
 											const movieCount = moviesByGenre[genre]?.length || 0;
 											const podcastCount = podcastsByGenre[genre]?.length || 0;
 											const articleCount = articlesByGenre[genre]?.length || 0;
-											const total = bookCount + movieCount + podcastCount + articleCount;
+											const tvshowCount = tvshowsByGenre[genre]?.length || 0;
+											const total = bookCount + movieCount + podcastCount + articleCount + tvshowCount;
 											return (
 												<option key={genre} value={genre}>
 													{genre} ({total})
@@ -1910,9 +2296,9 @@ function DashboardPageInner() {
 							Your shelf is empty
 						</h2>
 						<p className="text-sm sm:text-base text-zinc-500 mb-4 sm:mb-6 px-4">
-							Add books, movies, or podcasts to get started
+							Add books, movies, TV shows, or podcasts to get started
 						</p>
-						<div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3 px-4">
+						<div className="flex flex-col sm:flex-row flex-wrap justify-center gap-2 sm:gap-3 px-4">
 							<button
 								onClick={() => setShowAddModal(true)}
 								className="px-4 py-2.5 sm:py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors"
@@ -1924,6 +2310,12 @@ function DashboardPageInner() {
 								className="px-4 py-2.5 sm:py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors"
 							>
 								Add a Movie
+							</button>
+							<button
+								onClick={() => setShowAddTVShowModal(true)}
+								className="px-4 py-2.5 sm:py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors"
+							>
+								Add a TV Show
 							</button>
 							<button
 								onClick={() => setShowAddPodcastModal(true)}
@@ -1947,11 +2339,13 @@ function DashboardPageInner() {
 							const hasMovies = moviesByGenre[genre]?.length > 0;
 							const hasPodcasts = podcastsByGenre[genre]?.length > 0;
 							const hasArticles = articlesByGenre[genre]?.length > 0;
+							const hasTVShows = tvshowsByGenre[genre]?.length > 0;
 							if (mediaTypeFilter === 'books') return hasBooks;
 							if (mediaTypeFilter === 'movies') return hasMovies;
 							if (mediaTypeFilter === 'podcasts') return hasPodcasts;
 							if (mediaTypeFilter === 'articles') return hasArticles;
-							return hasBooks || hasMovies || hasPodcasts || hasArticles;
+							if (mediaTypeFilter === 'tvshows') return hasTVShows;
+							return hasBooks || hasMovies || hasPodcasts || hasArticles || hasTVShows;
 						})
 						.map((genre) => {
 							const isCollapsed =
@@ -1960,6 +2354,7 @@ function DashboardPageInner() {
 							const genreMovies = moviesByGenre[genre] || [];
 							const genrePodcasts = podcastsByGenre[genre] || [];
 							const genreArticles = articlesByGenre[genre] || [];
+							const genreTVShows = tvshowsByGenre[genre] || [];
 
 							// Filter items based on media type
 							const showBooks =
@@ -1970,13 +2365,16 @@ function DashboardPageInner() {
 								mediaTypeFilter === 'all' || mediaTypeFilter === 'podcasts';
 							const showArticles =
 								mediaTypeFilter === 'all' || mediaTypeFilter === 'articles';
+							const showTVShows =
+								mediaTypeFilter === 'all' || mediaTypeFilter === 'tvshows';
 
 							// Count for badge
 							const itemCount =
 								(showBooks ? genreBooks.length : 0) +
 								(showMovies ? genreMovies.length : 0) +
 								(showPodcasts ? genrePodcasts.length : 0) +
-								(showArticles ? genreArticles.length : 0);
+								(showArticles ? genreArticles.length : 0) +
+								(showTVShows ? genreTVShows.length : 0);
 
 							return (
 								<section key={genre} className="mb-6 sm:mb-8">
@@ -2028,6 +2426,8 @@ function DashboardPageInner() {
 															setSelectedUserPodcastId(null);
 															setSelectedArticle(null);
 															setSelectedUserArticleId(null);
+															setSelectedTVShow(null);
+															setSelectedUserTVShowId(null);
 															selectBook(getBookWithDetails(ub), ub.id);
 														}}
 													/>
@@ -2045,6 +2445,8 @@ function DashboardPageInner() {
 															setSelectedUserPodcastId(null);
 															setSelectedArticle(null);
 															setSelectedUserArticleId(null);
+															setSelectedTVShow(null);
+															setSelectedUserTVShowId(null);
 															selectMovie(getMovieWithDetails(um), um.id);
 														}}
 													/>
@@ -2062,6 +2464,8 @@ function DashboardPageInner() {
 															setSelectedUserMovieId(null);
 															setSelectedArticle(null);
 															setSelectedUserArticleId(null);
+															setSelectedTVShow(null);
+															setSelectedUserTVShowId(null);
 															selectPodcast(getPodcastWithDetails(up), up.id);
 														}}
 													/>
@@ -2079,7 +2483,28 @@ function DashboardPageInner() {
 															setSelectedUserMovieId(null);
 															setSelectedPodcast(null);
 															setSelectedUserPodcastId(null);
+															setSelectedTVShow(null);
+															setSelectedUserTVShowId(null);
 															selectArticle(getArticleWithDetails(ua), ua.id);
+														}}
+													/>
+												))}
+											{/* Render TV shows */}
+											{showTVShows &&
+												genreTVShows.map((ut) => (
+													<TVShowCard
+														key={`tvshow-${ut.id}`}
+														tvshow={getTVShowWithDetails(ut)}
+														onClick={() => {
+															setSelectedBook(null);
+															setSelectedUserBookId(null);
+															setSelectedMovie(null);
+															setSelectedUserMovieId(null);
+															setSelectedPodcast(null);
+															setSelectedUserPodcastId(null);
+															setSelectedArticle(null);
+															setSelectedUserArticleId(null);
+															selectTVShow(getTVShowWithDetails(ut), ut.id);
 														}}
 													/>
 												))}
@@ -2117,6 +2542,13 @@ function DashboardPageInner() {
 				<AddArticleModal
 					onClose={() => setShowAddArticleModal(false)}
 					onArticleAdded={handleArticleAdded}
+				/>
+			)}
+
+			{showAddTVShowModal && (
+				<AddTVShowModal
+					onClose={() => setShowAddTVShowModal(false)}
+					onTVShowAdded={handleTVShowAdded}
 				/>
 			)}
 
@@ -2203,6 +2635,27 @@ function DashboardPageInner() {
 						: undefined
 				}
 				onUpdate={handleUpdateArticle}
+			/>
+
+			{/* TV Show Details Sidebar */}
+			<TVShowDetailsSidebar
+				tvshow={selectedTVShow}
+				onClose={() => {
+					selectTVShow(null, null);
+				}}
+				onRefresh={
+					selectedTVShow ? () => handleRefreshTVShow(selectedTVShow.id) : undefined
+				}
+				onRemove={
+					selectedUserTVShowId
+						? async () => {
+								await handleRemoveTVShow(selectedUserTVShowId);
+								selectTVShow(null, null);
+							}
+						: undefined
+				}
+				onUpdateWatchingStatus={handleUpdateWatchingStatus}
+				onUpdateProgress={handleUpdateProgress}
 			/>
 
 			{/* Chat Sidebar */}

@@ -1,6 +1,7 @@
 import { BookWithDetails, RatingSource } from '@/app/lib/books';
 import { MovieWithDetails, MovieRatingSource } from '@/app/lib/movies';
 import { PodcastWithDetails, PodcastRatingSource } from '@/app/lib/podcasts';
+import { TVShowWithDetails, TVShowRatingSource } from '@/app/lib/tvshows';
 import { createClient } from '@/app/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import PublicBookshelf from './PublicBookshelf';
@@ -74,6 +75,29 @@ function buildPodcastRatings(podcast: any): PodcastRatingSource[] {
 	return ratings;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildTVShowRatings(tvshow: any): TVShowRatingSource[] {
+	const ratings: TVShowRatingSource[] = [];
+	if (tvshow.tmdb_rating) {
+		ratings.push({
+			source: 'TMDB',
+			rating: tvshow.tmdb_rating,
+			ratingsCount: tvshow.tmdb_ratings_count || undefined,
+			displayFormat: 'stars',
+		});
+	}
+	if (tvshow.imdb_rating) {
+		ratings.push({
+			source: 'IMDb',
+			rating: tvshow.imdb_rating,
+			ratingsCount: tvshow.imdb_ratings_count || undefined,
+			url: tvshow.imdb_url || undefined,
+			displayFormat: 'stars',
+		});
+	}
+	return ratings;
+}
+
 interface PageProps {
 	params: Promise<{ username: string }>;
 }
@@ -93,8 +117,8 @@ export default async function PublicProfilePage({ params }: PageProps) {
 		notFound();
 	}
 
-	// Fetch user's books, movies, and podcasts in parallel
-	const [booksResult, moviesResult, podcastsResult] = await Promise.all([
+	// Fetch user's books, movies, podcasts, and TV shows in parallel
+	const [booksResult, moviesResult, podcastsResult, tvshowsResult] = await Promise.all([
 		supabase
 			.from('user_books')
 			.select(`
@@ -119,6 +143,14 @@ export default async function PublicProfilePage({ params }: PageProps) {
 			`)
 			.eq('user_id', profile.id)
 			.order('created_at', { ascending: false }),
+		supabase
+			.from('user_tvshows')
+			.select(`
+				*,
+				tvshow:tvshows(*)
+			`)
+			.eq('user_id', profile.id)
+			.order('created_at', { ascending: false }),
 	]);
 
 	if (booksResult.error) {
@@ -129,6 +161,9 @@ export default async function PublicProfilePage({ params }: PageProps) {
 	}
 	if (podcastsResult.error) {
 		console.error('Error fetching podcasts:', podcastsResult.error);
+	}
+	if (tvshowsResult.error) {
+		console.error('Error fetching TV shows:', tvshowsResult.error);
 	}
 
 	// Convert to BookWithDetails format with all cached details
@@ -203,6 +238,42 @@ export default async function PublicProfilePage({ params }: PageProps) {
 		detailsFetchedAt: up.podcast.details_fetched_at || undefined,
 	}));
 
+	// Convert to TVShowWithDetails format with all cached details
+	const tvshows: TVShowWithDetails[] = (tvshowsResult.data || []).map((ut) => ({
+		id: ut.tvshow_id,
+		title: ut.tvshow.title,
+		creator: ut.tvshow.creator || undefined,
+		firstAirDate: ut.tvshow.first_air_date || undefined,
+		genre: ut.genre || (ut.tvshow.genres?.[0]) || 'Uncategorized',
+		notes: ut.notes || undefined,
+		priority: ut.priority || undefined,
+		watchingStatus: ut.watching_status || 'want_to_watch',
+		currentSeason: ut.current_season || undefined,
+		currentEpisode: ut.current_episode || undefined,
+		rating: ut.rating || undefined,
+		description: ut.tvshow.description || undefined,
+		tagline: ut.tvshow.tagline || undefined,
+		posterImage: ut.tvshow.poster_image || undefined,
+		backdropImage: ut.tvshow.backdrop_image || undefined,
+		cast: ut.tvshow.cast_members || undefined,
+		genres: ut.tvshow.genres || undefined,
+		networks: ut.tvshow.networks || undefined,
+		numberOfSeasons: ut.tvshow.number_of_seasons || undefined,
+		numberOfEpisodes: ut.tvshow.number_of_episodes || undefined,
+		episodeRunTime: ut.tvshow.episode_run_time || undefined,
+		status: ut.tvshow.status || undefined,
+		inProduction: ut.tvshow.in_production || false,
+		tmdbId: ut.tvshow.tmdb_id || undefined,
+		imdbId: ut.tvshow.imdb_id || undefined,
+		lastAirDate: ut.tvshow.last_air_date || undefined,
+		productionCompanies: ut.tvshow.production_companies || undefined,
+		originCountry: ut.tvshow.origin_country || undefined,
+		originalLanguage: ut.tvshow.original_language || undefined,
+		imdbUrl: ut.tvshow.imdb_url || undefined,
+		ratings: buildTVShowRatings(ut.tvshow),
+		detailsFetchedAt: ut.tvshow.details_fetched_at || undefined,
+	}));
+
 	// Group books by genre
 	const booksByGenre = books.reduce(
 		(acc, book) => {
@@ -236,11 +307,23 @@ export default async function PublicProfilePage({ params }: PageProps) {
 		{} as Record<string, PodcastWithDetails[]>,
 	);
 
-	// Combined genres (union of book, movie, and podcast genres)
+	// Group TV shows by genre
+	const tvshowsByGenre = tvshows.reduce(
+		(acc, tvshow) => {
+			const genre = tvshow.genre || 'Uncategorized';
+			if (!acc[genre]) acc[genre] = [];
+			acc[genre].push(tvshow);
+			return acc;
+		},
+		{} as Record<string, TVShowWithDetails[]>,
+	);
+
+	// Combined genres (union of book, movie, podcast, and TV show genres)
 	const allGenres = new Set([
 		...Object.keys(booksByGenre),
 		...Object.keys(moviesByGenre),
 		...Object.keys(podcastsByGenre),
+		...Object.keys(tvshowsByGenre),
 	]);
 
 	const sortedGenres = Array.from(allGenres).sort((a, b) => {
@@ -255,9 +338,11 @@ export default async function PublicProfilePage({ params }: PageProps) {
 			books={books}
 			movies={movies}
 			podcasts={podcasts}
+			tvshows={tvshows}
 			booksByGenre={booksByGenre}
 			moviesByGenre={moviesByGenre}
 			podcastsByGenre={podcastsByGenre}
+			tvshowsByGenre={tvshowsByGenre}
 			sortedGenres={sortedGenres}
 		/>
 	);

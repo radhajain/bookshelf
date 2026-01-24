@@ -1,17 +1,17 @@
 // Shared content types for books, movies, and podcasts
 
-export type ContentType = 'book' | 'movie' | 'podcast' | 'article';
+export type ContentType = 'book' | 'movie' | 'podcast' | 'article' | 'tvshow';
 
 // Configuration for each content type's visual appearance
 export interface ContentTypeConfig {
   type: ContentType;
   label: string;
   pluralLabel: string;
-  primaryColor: 'amber' | 'blue' | 'purple' | 'teal';
+  primaryColor: 'amber' | 'blue' | 'purple' | 'teal' | 'green';
   bgGradient: string;
   badgeClass: string;
   creatorLabel: string;
-  icon: 'book' | 'film' | 'microphone' | 'newspaper';
+  icon: 'book' | 'film' | 'microphone' | 'newspaper' | 'tv';
 }
 
 export const CONTENT_CONFIGS: Record<ContentType, ContentTypeConfig> = {
@@ -54,6 +54,16 @@ export const CONTENT_CONFIGS: Record<ContentType, ContentTypeConfig> = {
     badgeClass: 'bg-teal-500',
     creatorLabel: 'by',
     icon: 'newspaper',
+  },
+  tvshow: {
+    type: 'tvshow',
+    label: 'TV Show',
+    pluralLabel: 'TV Shows',
+    primaryColor: 'green',
+    bgGradient: 'from-green-100 to-green-50',
+    badgeClass: 'bg-green-500',
+    creatorLabel: 'by',
+    icon: 'tv',
   },
 };
 
