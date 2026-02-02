@@ -41,6 +41,7 @@ export interface DbUserBook {
   priority: string | null;
   read: boolean;
   read_at: string | null;
+  reading_status: 'want_to_read' | 'reading' | 'read' | null;
   created_at: string;
 }
 
@@ -66,6 +67,7 @@ export interface UpdateUserBookInput {
   priority?: string;
   read?: boolean;
   read_at?: string | null;
+  reading_status?: 'want_to_read' | 'reading' | 'read';
 }
 
 export interface UpdateBookInput {
@@ -201,6 +203,7 @@ export interface DbUserPodcast {
   genre: string | null;
   notes: string | null;
   priority: string | null;
+  listening_status: 'want_to_listen' | 'listening' | 'listened' | null;
   created_at: string;
 }
 
@@ -226,6 +229,7 @@ export interface UpdateUserPodcastInput {
   genre?: string;
   notes?: string;
   priority?: string;
+  listening_status?: 'want_to_listen' | 'listening' | 'listened';
 }
 
 export interface UpdatePodcastInput {

@@ -15,11 +15,11 @@ import {
 	UserTVShowWithDetails,
 	DbTVShow,
 } from '@/app/lib/types/database';
-import { BookWithDetails, RatingSource } from '@/app/lib/books';
+import { BookWithDetails, RatingSource, ReadingStatus, READING_STATUS_LABELS } from '@/app/lib/books';
 import { MovieWithDetails, MovieRatingSource } from '@/app/lib/movies';
-import { PodcastWithDetails, PodcastRatingSource } from '@/app/lib/podcasts';
+import { PodcastWithDetails, PodcastRatingSource, ListeningStatus, LISTENING_STATUS_LABELS } from '@/app/lib/podcasts';
 import { ArticleWithDetails } from '@/app/lib/articles';
-import { TVShowWithDetails, TVShowRatingSource, WatchingStatus } from '@/app/lib/tvshows';
+import { TVShowWithDetails, TVShowRatingSource, WatchingStatus, WATCHING_STATUS_LABELS } from '@/app/lib/tvshows';
 import { RateLimitError } from '@/app/lib/bookApi';
 import BookCard from '@/app/components/BookCard';
 import BookDetailsSidebar from '@/app/components/BookDetailsSidebar';
@@ -379,6 +379,7 @@ function DashboardPageInner() {
 	const [selectedGenreFilter, setSelectedGenreFilter] = useState<string>('all');
 	const [mediaTypeFilter, setMediaTypeFilter] =
 		useState<MediaTypeFilter>('all');
+	const [progressFilter, setProgressFilter] = useState<'all' | 'in_progress'>('all');
 	const [collapsedGenres, setCollapsedGenres] = useState<Set<string>>(
 		new Set(),
 	);
@@ -1268,6 +1269,76 @@ function DashboardPageInner() {
 		[selectedUserBookId, selectedBook],
 	);
 
+	const handleUpdateReadingStatus = useCallback(
+		async (status: ReadingStatus) => {
+			if (!selectedUserBookId) return;
+			try {
+				const response = await fetch(
+					`/api/user-books?id=${selectedUserBookId}`,
+					{
+						method: 'PATCH',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							reading_status: status,
+							read: status === 'read',
+							read_at: status === 'read' ? new Date().toISOString() : null,
+						}),
+					},
+				);
+				if (response.ok) {
+					// Update local state
+					setUserBooks((prev) =>
+						prev.map((ub) =>
+							ub.id === selectedUserBookId
+								? { ...ub, reading_status: status, read: status === 'read' }
+								: ub,
+						),
+					);
+					if (selectedBook) {
+						setSelectedBook({ ...selectedBook, readingStatus: status, read: status === 'read' });
+					}
+				}
+			} catch (error) {
+				console.error('Error updating reading status:', error);
+			}
+		},
+		[selectedUserBookId, selectedBook],
+	);
+
+	const handleUpdateListeningStatus = useCallback(
+		async (status: ListeningStatus) => {
+			if (!selectedUserPodcastId) return;
+			try {
+				const response = await fetch(
+					`/api/user-podcasts?id=${selectedUserPodcastId}`,
+					{
+						method: 'PATCH',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							listening_status: status,
+						}),
+					},
+				);
+				if (response.ok) {
+					// Update local state
+					setUserPodcasts((prev) =>
+						prev.map((up) =>
+							up.id === selectedUserPodcastId
+								? { ...up, listening_status: status }
+								: up,
+						),
+					);
+					if (selectedPodcast) {
+						setSelectedPodcast({ ...selectedPodcast, listeningStatus: status });
+					}
+				}
+			} catch (error) {
+				console.error('Error updating listening status:', error);
+			}
+		},
+		[selectedUserPodcastId, selectedPodcast],
+	);
+
 	// Convert UserBook to BookWithDetails for display
 	const getBookWithDetails = useCallback(
 		(ub: UserBookWithDetails): BookWithDetails => {
@@ -1277,6 +1348,8 @@ function DashboardPageInner() {
 					...enriched,
 					notes: ub.notes || undefined,
 					priority: ub.priority || undefined,
+					read: ub.read || false,
+					readingStatus: ub.reading_status || (ub.read ? 'read' : 'want_to_read'),
 				};
 			}
 			return {
@@ -1290,6 +1363,8 @@ function DashboardPageInner() {
 				description: ub.book.description || undefined,
 				coverImage: ub.book.cover_image || undefined,
 				ratings: [],
+				read: ub.read || false,
+				readingStatus: ub.reading_status || (ub.read ? 'read' : 'want_to_read'),
 			};
 		},
 		[enrichedBooks],
@@ -1334,6 +1409,7 @@ function DashboardPageInner() {
 					...enriched,
 					notes: up.notes || undefined,
 					priority: up.priority || undefined,
+					listeningStatus: up.listening_status || 'want_to_listen',
 				};
 			}
 			return {
@@ -1347,6 +1423,7 @@ function DashboardPageInner() {
 				coverImage: up.podcast.cover_image || undefined,
 				totalEpisodes: up.podcast.total_episodes || undefined,
 				ratings: [],
+				listeningStatus: up.listening_status || 'want_to_listen',
 			};
 		},
 		[enrichedPodcasts],
@@ -1490,64 +1567,94 @@ function DashboardPageInner() {
 		}
 	}, [searchParams, userTVShows, loading, getTVShowWithDetails]);
 
-	// Filter books and movies by search query
-	const filteredUserBooks = searchQuery
-		? userBooks.filter((ub) => {
-				const query = searchQuery.toLowerCase();
-				return (
-					ub.book.title.toLowerCase().includes(query) ||
-					ub.book.author?.toLowerCase().includes(query) ||
-					ub.notes?.toLowerCase().includes(query)
-				);
-			})
-		: userBooks;
+	// Filter books and movies by search query and progress filter
+	const filteredUserBooks = userBooks.filter((ub) => {
+		// Search filter
+		if (searchQuery) {
+			const query = searchQuery.toLowerCase();
+			const matchesSearch =
+				ub.book.title.toLowerCase().includes(query) ||
+				ub.book.author?.toLowerCase().includes(query) ||
+				ub.notes?.toLowerCase().includes(query);
+			if (!matchesSearch) return false;
+		}
+		// Progress filter - show items with 'reading' status (or no status and not read)
+		if (progressFilter === 'in_progress') {
+			return ub.reading_status === 'reading';
+		}
+		return true;
+	});
 
-	const filteredUserMovies = searchQuery
-		? userMovies.filter((um) => {
-				const query = searchQuery.toLowerCase();
-				return (
-					um.movie.title.toLowerCase().includes(query) ||
-					um.movie.director?.toLowerCase().includes(query) ||
-					um.notes?.toLowerCase().includes(query) ||
-					um.movie.cast_members?.some((c) => c.toLowerCase().includes(query))
-				);
-			})
-		: userMovies;
+	const filteredUserMovies = userMovies.filter((um) => {
+		// Search filter
+		if (searchQuery) {
+			const query = searchQuery.toLowerCase();
+			const matchesSearch =
+				um.movie.title.toLowerCase().includes(query) ||
+				um.movie.director?.toLowerCase().includes(query) ||
+				um.notes?.toLowerCase().includes(query) ||
+				um.movie.cast_members?.some((c) => c.toLowerCase().includes(query));
+			if (!matchesSearch) return false;
+		}
+		// Progress filter - movies don't have an "in progress" state (watched/unwatched binary)
+		if (progressFilter === 'in_progress') {
+			return false; // Movies are either watched or not, no "in progress"
+		}
+		return true;
+	});
 
-	const filteredUserPodcasts = searchQuery
-		? userPodcasts.filter((up) => {
-				const query = searchQuery.toLowerCase();
-				return (
-					up.podcast.title.toLowerCase().includes(query) ||
-					up.podcast.creator?.toLowerCase().includes(query) ||
-					up.notes?.toLowerCase().includes(query)
-				);
-			})
-		: userPodcasts;
+	const filteredUserPodcasts = userPodcasts.filter((up) => {
+		// Search filter
+		if (searchQuery) {
+			const query = searchQuery.toLowerCase();
+			const matchesSearch =
+				up.podcast.title.toLowerCase().includes(query) ||
+				up.podcast.creator?.toLowerCase().includes(query) ||
+				up.notes?.toLowerCase().includes(query);
+			if (!matchesSearch) return false;
+		}
+		// Progress filter - show items with 'listening' status
+		if (progressFilter === 'in_progress') {
+			return up.listening_status === 'listening';
+		}
+		return true;
+	});
 
-	const filteredUserArticles = searchQuery
-		? userArticles.filter((ua) => {
-				const query = searchQuery.toLowerCase();
-				return (
-					ua.article.title.toLowerCase().includes(query) ||
-					ua.article.author?.toLowerCase().includes(query) ||
-					ua.article.publication?.toLowerCase().includes(query) ||
-					ua.notes?.toLowerCase().includes(query)
-				);
-			})
-		: userArticles;
+	const filteredUserArticles = userArticles.filter((ua) => {
+		// Search filter
+		if (searchQuery) {
+			const query = searchQuery.toLowerCase();
+			const matchesSearch =
+				ua.article.title.toLowerCase().includes(query) ||
+				ua.article.author?.toLowerCase().includes(query) ||
+				ua.article.publication?.toLowerCase().includes(query) ||
+				ua.notes?.toLowerCase().includes(query);
+			if (!matchesSearch) return false;
+		}
+		// Progress filter - articles don't have an "in progress" state
+		if (progressFilter === 'in_progress') {
+			return false;
+		}
+		return true;
+	});
 
-	const filteredUserTVShows = searchQuery
-		? userTVShows.filter((ut) => {
-				const query = searchQuery.toLowerCase();
-				return (
-					ut.tvshow.title.toLowerCase().includes(query) ||
-					ut.tvshow.creator?.toLowerCase().includes(query) ||
-					ut.notes?.toLowerCase().includes(query) ||
-					ut.tvshow.cast_members?.some((c) => c.toLowerCase().includes(query))
-				);
-			})
-		: userTVShows;
+	const filteredUserTVShows = userTVShows.filter((ut) => {
+		// Search filter
+		if (searchQuery) {
+			const query = searchQuery.toLowerCase();
+			const matchesSearch =
+				ut.tvshow.title.toLowerCase().includes(query) ||
+				ut.tvshow.creator?.toLowerCase().includes(query) ||
+				ut.notes?.toLowerCase().includes(query) ||
+				ut.tvshow.cast_members?.some((c) => c.toLowerCase().includes(query));
+			if (!matchesSearch) return false;
+		}
+		// Progress filter - show items with 'watching' status
+		if (progressFilter === 'in_progress') {
+			return ut.watching_status === 'watching';
+		}
+		return true;
+	});
 
 	// Group books by genre (genre is now on the book, not user_books)
 	const booksByGenre = filteredUserBooks.reduce(
@@ -2166,6 +2273,34 @@ function DashboardPageInner() {
 									</select>
 								</div>
 
+								{/* In Progress Filter Bubble */}
+								{(() => {
+									const inProgressCount =
+										userBooks.filter((ub) => ub.reading_status === 'reading').length +
+										userPodcasts.filter((up) => up.listening_status === 'listening').length +
+										userTVShows.filter((ut) => ut.watching_status === 'watching').length;
+									return inProgressCount > 0 ? (
+										<button
+											onClick={() => setProgressFilter(progressFilter === 'in_progress' ? 'all' : 'in_progress')}
+											className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors flex-shrink-0 ${
+												progressFilter === 'in_progress'
+													? 'bg-blue-500 text-white'
+													: 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+											}`}
+										>
+											<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+											</svg>
+											In Progress ({inProgressCount})
+											{progressFilter === 'in_progress' && (
+												<svg className="w-3.5 h-3.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+												</svg>
+											)}
+										</button>
+									) : null;
+								})()}
+
 								{/* Collapse/Expand All */}
 								{selectedGenreFilter === 'all' && sortedGenres.length > 1 && (
 									<div className="hidden sm:flex items-center gap-1 border-l border-zinc-200 pl-2 sm:pl-3 flex-shrink-0">
@@ -2577,6 +2712,7 @@ function DashboardPageInner() {
 						: undefined
 				}
 				onToggleRead={selectedUserBookId ? handleToggleRead : undefined}
+				onUpdateReadingStatus={selectedUserBookId ? handleUpdateReadingStatus : undefined}
 			/>
 
 			{/* Movie Details Sidebar */}
@@ -2618,6 +2754,7 @@ function DashboardPageInner() {
 							}
 						: undefined
 				}
+				onUpdateListeningStatus={selectedUserPodcastId ? handleUpdateListeningStatus : undefined}
 			/>
 
 			{/* Article Details Sidebar */}

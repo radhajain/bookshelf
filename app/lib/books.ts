@@ -1,5 +1,18 @@
 // Book data parsed from Reading List.csv
 
+export type ReadingStatus = 'want_to_read' | 'reading' | 'read';
+
+export const READING_STATUS_LABELS: Record<ReadingStatus, string> = {
+  want_to_read: 'Want to Read',
+  reading: 'Reading',
+  read: 'Read',
+};
+
+export function getReadingStatusLabel(status?: ReadingStatus): string {
+  if (!status) return READING_STATUS_LABELS.want_to_read;
+  return READING_STATUS_LABELS[status];
+}
+
 export interface Book {
   id: string;
   title: string;
@@ -30,7 +43,8 @@ export interface BookWithDetails extends Book {
   deducedGenre?: string; // Genre deduced from API subjects, used to set book.genre if not already set
   needsAuthorClarification?: boolean; // Flag when multiple authors found for a book
   detailsFetchedAt?: string; // ISO date string of when details were last fetched
-  read?: boolean; // Whether the user has read this book
+  read?: boolean; // Whether the user has read this book (deprecated, use readingStatus)
+  readingStatus?: ReadingStatus; // Current reading status
 }
 
 // Parse title to extract author if embedded (e.g., "Elon Musk by Walter Isaacson")

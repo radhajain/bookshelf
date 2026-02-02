@@ -189,12 +189,13 @@ export async function PATCH(request: Request) {
   }
 
   const body = await request.json();
-  const { notes, priority, genre } = body;
+  const { notes, priority, genre, listening_status } = body;
 
   const updateData: Record<string, unknown> = {};
   if (notes !== undefined) updateData.notes = notes;
   if (priority !== undefined) updateData.priority = priority;
   if (genre !== undefined) updateData.genre = genre;
+  if (listening_status !== undefined) updateData.listening_status = listening_status;
 
   const { data, error } = await supabase
     .from('user_podcasts')

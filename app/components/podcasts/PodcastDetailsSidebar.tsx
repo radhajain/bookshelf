@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { PodcastWithDetails, PodcastRatingSource, formatEpisodeCount } from '../../lib/podcasts';
+import { PodcastWithDetails, PodcastRatingSource, formatEpisodeCount, ListeningStatus, LISTENING_STATUS_LABELS } from '../../lib/podcasts';
 import { Sidebar, ConfirmDialog, SectionHeader } from '../shared';
 
 interface PodcastDetailsSidebarProps {
@@ -10,6 +10,7 @@ interface PodcastDetailsSidebarProps {
   onClose: () => void;
   onRefresh?: () => Promise<PodcastWithDetails | null>;
   onRemove?: () => Promise<void>;
+  onUpdateListeningStatus?: (status: ListeningStatus) => Promise<void>;
 }
 
 // Source-specific colors and styles
@@ -49,10 +50,11 @@ function LinkDisplay({ rating }: { rating: PodcastRatingSource }) {
   );
 }
 
-export default function PodcastDetailsSidebar({ podcast, onClose, onRefresh, onRemove }: PodcastDetailsSidebarProps) {
+export default function PodcastDetailsSidebar({ podcast, onClose, onRefresh, onRemove, onUpdateListeningStatus }: PodcastDetailsSidebarProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   if (!podcast) return null;
 
@@ -76,6 +78,16 @@ export default function PodcastDetailsSidebar({ podcast, onClose, onRefresh, onR
       setShowRemoveConfirm(false);
     } finally {
       setRemoving(false);
+    }
+  };
+
+  const handleStatusChange = async (status: ListeningStatus) => {
+    if (!onUpdateListeningStatus) return;
+    setUpdatingStatus(true);
+    try {
+      await onUpdateListeningStatus(status);
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -141,6 +153,31 @@ export default function PodcastDetailsSidebar({ podcast, onClose, onRefresh, onR
               </div>
             </div>
           </div>
+
+          {/* Listening Status */}
+          {onUpdateListeningStatus && (
+            <div className="mb-6">
+              <h3 className="text-sm font-semibold text-zinc-700 mb-3">Listening Status</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {(Object.entries(LISTENING_STATUS_LABELS) as [ListeningStatus, string][]).map(([status, label]) => (
+                  <button
+                    key={status}
+                    onClick={() => handleStatusChange(status)}
+                    disabled={updatingStatus}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      podcast.listeningStatus === status
+                        ? status === 'listening' ? 'bg-blue-500 text-white'
+                        : status === 'listened' ? 'bg-green-500 text-white'
+                        : 'bg-zinc-500 text-white'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* External Links Section */}
           {linksWithData.length > 0 && (

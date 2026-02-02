@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { BookWithDetails, RatingSource } from '../lib/books';
+import { BookWithDetails, RatingSource, ReadingStatus, READING_STATUS_LABELS } from '../lib/books';
 import AuthorSelectionModal from './books/AuthorSelectionModal';
 import CoverSelectionModal from './books/CoverSelectionModal';
 
@@ -12,6 +12,7 @@ interface BookDetailsSidebarProps {
   onRefresh?: () => Promise<BookWithDetails | null>;
   onRemove?: () => Promise<void>;
   onToggleRead?: (read: boolean) => Promise<void>;
+  onUpdateReadingStatus?: (status: ReadingStatus) => Promise<void>;
 }
 
 // Source-specific colors and icons
@@ -82,13 +83,14 @@ function RatingDisplay({ rating }: { rating: RatingSource }) {
   );
 }
 
-export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove, onToggleRead }: BookDetailsSidebarProps) {
+export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove, onToggleRead, onUpdateReadingStatus }: BookDetailsSidebarProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [showAuthorSelection, setShowAuthorSelection] = useState(false);
   const [showCoverSelection, setShowCoverSelection] = useState(false);
   const [togglingRead, setTogglingRead] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   if (!book) return null;
 
@@ -130,6 +132,16 @@ export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove,
       await onToggleRead(!book.read);
     } finally {
       setTogglingRead(false);
+    }
+  };
+
+  const handleStatusChange = async (status: ReadingStatus) => {
+    if (!onUpdateReadingStatus) return;
+    setUpdatingStatus(true);
+    try {
+      await onUpdateReadingStatus(status);
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -305,8 +317,33 @@ export default function BookDetailsSidebar({ book, onClose, onRefresh, onRemove,
             </button>
           )}
 
-          {/* Read Status Toggle */}
-          {onToggleRead && (
+          {/* Reading Status */}
+          {onUpdateReadingStatus && (
+            <div className="mb-6">
+              <h3 className="text-sm font-semibold text-zinc-700 mb-3">Reading Status</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {(Object.entries(READING_STATUS_LABELS) as [ReadingStatus, string][]).map(([status, label]) => (
+                  <button
+                    key={status}
+                    onClick={() => handleStatusChange(status)}
+                    disabled={updatingStatus}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      book.readingStatus === status
+                        ? status === 'reading' ? 'bg-blue-500 text-white'
+                        : status === 'read' ? 'bg-green-500 text-white'
+                        : 'bg-zinc-500 text-white'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Legacy Read Status Toggle (for backwards compatibility) */}
+          {onToggleRead && !onUpdateReadingStatus && (
             <div className="mb-6">
               <button
                 onClick={handleToggleRead}

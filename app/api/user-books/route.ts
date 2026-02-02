@@ -148,7 +148,7 @@ export async function PATCH(request: Request) {
   }
 
   const body = await request.json();
-  const { notes, priority, read, read_at } = body;
+  const { notes, priority, read, read_at, reading_status } = body;
 
   // Build update object with only provided fields
   const updateData: Record<string, unknown> = {};
@@ -156,6 +156,7 @@ export async function PATCH(request: Request) {
   if (priority !== undefined) updateData.priority = priority;
   if (read !== undefined) updateData.read = read;
   if (read_at !== undefined) updateData.read_at = read_at;
+  if (reading_status !== undefined) updateData.reading_status = reading_status;
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });

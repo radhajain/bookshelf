@@ -1,5 +1,18 @@
 // Podcast data types for the application
 
+export type ListeningStatus = 'want_to_listen' | 'listening' | 'listened';
+
+export const LISTENING_STATUS_LABELS: Record<ListeningStatus, string> = {
+  want_to_listen: 'Want to Listen',
+  listening: 'Listening',
+  listened: 'Listened',
+};
+
+export function getListeningStatusLabel(status?: ListeningStatus): string {
+  if (!status) return LISTENING_STATUS_LABELS.want_to_listen;
+  return LISTENING_STATUS_LABELS[status];
+}
+
 export interface Podcast {
   id: string;
   title: string;
@@ -7,6 +20,7 @@ export interface Podcast {
   genre: string;
   notes?: string;
   priority?: string;
+  listeningStatus?: ListeningStatus;
 }
 
 export interface PodcastRatingSource {
@@ -29,6 +43,7 @@ export interface PodcastWithDetails extends Podcast {
   websiteUrl?: string;
   ratings: PodcastRatingSource[];
   detailsFetchedAt?: string;
+  listeningStatus?: ListeningStatus;
 }
 
 // Map iTunes genre IDs to genre names
